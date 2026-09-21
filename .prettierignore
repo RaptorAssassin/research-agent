@@ -1,0 +1,22 @@
+# dependencies
+node_modules
+.pnp
+.pnp.*
+
+# build
+.next
+out
+build
+dist
+
+# lockfiles not formatted
+pnpm-lock.yaml
+
+# env
+.env*
+.next/types
+.next/dev/types
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
