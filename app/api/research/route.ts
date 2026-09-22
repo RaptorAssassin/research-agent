@@ -5,7 +5,7 @@ import { sseEncode, sseEncodeDone } from "@/lib/agent/runner"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-type ResearchRequest = {
+export type ResearchRequest = {
   query: string
   stream?: boolean
   mode?: StreamMode
