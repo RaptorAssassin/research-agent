@@ -12,17 +12,17 @@ export function SearchBar({ run }: { run: (query: string) => void }) {
     e.preventDefault()
 
     const formData = new FormData(e.currentTarget)
-    const query = formData.get("query") as string
-    query.trim()
+    const raw = formData.get("query") as string
+    const query = raw.trim()
 
     if (!query) return
 
-    console.log("Search query:", query)
-
     run(query)
+    e.currentTarget.reset()
+    inputRef.current?.focus()
   }
 
-  return <div className="rounded-2xl absolute bottom-10 left-1/2 -translate-x-1/2 p-4 bg-zinc-900 w-full max-w-4/5 md:max-w-2/3">
+  return <div className="rounded-4xl absolute bottom-10 left-1/2 -translate-x-1/2 p-4 bg-zinc-900 w-full max-w-4/5 md:max-w-2/3 z-50">
       <form className="w-full h-full flex items-center justify-center gap-2" onSubmit={handleSubmit}>
     <input type="text" inputMode="search" name="query" placeholder="Research Task" autoComplete="off" className="focus:outline-none w-full" ref={inputRef}/>
     <div className="p-2 overflow-hidden w-25 h-15 flex items-center justify-center">

@@ -157,15 +157,15 @@ For `/research` use `mode:"sse"` and render events as vertical stepper. For fina
 ## Env — Ollama first
 
 ```
-OLLAMA_MODEL=gemma3:12b              # or gemma3:12b cheap fallback
-OLLAMA_CHEAP_MODEL=gemma3:12b        # planner/researcher/extractor
-OLLAMA_STRONG_MODEL=gemma3:12b       # factChecker/synthesizer/evaluator (temp 0.2)
+OLLAMA_MODEL=gemma4:12b              # or gemma3:12b cheap fallback
+OLLAMA_CHEAP_MODEL=gemma4:12b        # planner/researcher/extractor
+OLLAMA_STRONG_MODEL=gemma4:12b       # factChecker/synthesizer/evaluator (temp 0.2)
 OLLAMA_BASE_URL=http://localhost:11434
 TAVILY_API_KEY=tvly-...              # or empty → keyless (rate-limited)
 TAVILY_MAX_RESULTS=3                 # 1..5, 3=free sweet spot
 ```
 
-`ollama serve` must run, `ollama run gemma3:12b` once. Each node falls back to deterministic mock if LLM unreachable, so graph still completes without Ollama (lower quality).
+`ollama serve` must run, `ollama run gemma4:12b` once. Each node falls back to deterministic mock if LLM unreachable, so graph still completes without Ollama (lower quality).
 
 ## Invariants frontend can trust
 

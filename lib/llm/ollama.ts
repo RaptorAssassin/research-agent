@@ -12,8 +12,9 @@ export class OllamaProvider implements LLMProvider {
   private readonly temperature?: number
 
   constructor(opts: LLMOptions = {}) {
-    this.model = opts.model ?? process.env.OLLAMA_MODEL ?? 'gemma3:12b'
-    this.baseUrl = opts.baseUrl ?? process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
+    this.model = opts.model ?? process.env.OLLAMA_MODEL ?? 'gemma4:12b'
+    this.baseUrl =
+      opts.baseUrl ?? process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
     this.temperature = opts.temperature
   }
 
@@ -29,12 +30,14 @@ export class OllamaProvider implements LLMProvider {
           model: this.model,
           prompt,
           stream: false,
-          ...(this.temperature !== undefined ? { options: { temperature: this.temperature } } : {}),
+          ...(this.temperature !== undefined
+            ? { options: { temperature: this.temperature } }
+            : {}),
         }),
       })
     } catch (cause) {
       throw new Error(
-        `Ollama not reachable at ${this.baseUrl} — is 'ollama serve' running? Run 'ollama run ${this.model}' (cause: ${cause instanceof Error ? cause.message : String(cause)})`,
+        `Ollama not reachable at ${this.baseUrl} — is 'ollama serve' running? Run 'ollama run ${this.model}' (cause: ${cause instanceof Error ? cause.message : String(cause)})`
       )
     }
 
@@ -42,21 +45,30 @@ export class OllamaProvider implements LLMProvider {
     try {
       data = (await response.json()) as OllamaGenerateResponse
     } catch {
-      throw new Error(`Ollama returned non-JSON response (status ${response.status})`)
+      throw new Error(
+        `Ollama returned non-JSON response (status ${response.status})`
+      )
     }
 
     if (!response.ok) {
-      throw new Error(`Ollama API request failed with status ${response.status}: ${JSON.stringify(data)}`)
+      throw new Error(
+        `Ollama API request failed with status ${response.status}: ${JSON.stringify(data)}`
+      )
     }
 
     if (!data.response) {
-      throw new Error('Ollama API response is missing the expected response field')
+      throw new Error(
+        'Ollama API response is missing the expected response field'
+      )
     }
 
     return data.response
   }
 
-  async structuredGenerate<T>(prompt: string, schema: z.ZodType<T>): Promise<T> {
+  async structuredGenerate<T>(
+    prompt: string,
+    schema: z.ZodType<T>
+  ): Promise<T> {
     const jsonSchema = z.toJSONSchema(schema)
     const basePrompt = `${prompt}\nRespond ONLY with valid JSON matching the schema. No prose, no markdown, no extra keys.`
 
@@ -73,12 +85,14 @@ export class OllamaProvider implements LLMProvider {
             prompt: currentPrompt,
             format: jsonSchema,
             stream: false,
-            ...(this.temperature !== undefined ? { options: { temperature: this.temperature } } : {}),
+            ...(this.temperature !== undefined
+              ? { options: { temperature: this.temperature } }
+              : {}),
           }),
         })
       } catch (cause) {
         throw new Error(
-          `Ollama not reachable at ${this.baseUrl} — is 'ollama serve' running? Run 'ollama run ${this.model}' (cause: ${cause instanceof Error ? cause.message : String(cause)})`,
+          `Ollama not reachable at ${this.baseUrl} — is 'ollama serve' running? Run 'ollama run ${this.model}' (cause: ${cause instanceof Error ? cause.message : String(cause)})`
         )
       }
 
@@ -86,15 +100,21 @@ export class OllamaProvider implements LLMProvider {
       try {
         data = (await response.json()) as OllamaGenerateResponse
       } catch {
-        throw new Error(`Ollama returned non-JSON response (status ${response.status})`)
+        throw new Error(
+          `Ollama returned non-JSON response (status ${response.status})`
+        )
       }
 
       if (!response.ok) {
-        throw new Error(`Ollama API request failed with status ${response.status}: ${JSON.stringify(data)}`)
+        throw new Error(
+          `Ollama API request failed with status ${response.status}: ${JSON.stringify(data)}`
+        )
       }
 
       if (!data.response) {
-        throw new Error('Ollama API response is missing the expected response field')
+        throw new Error(
+          'Ollama API response is missing the expected response field'
+        )
       }
 
       let parsed: unknown
@@ -102,7 +122,9 @@ export class OllamaProvider implements LLMProvider {
         parsed = JSON.parse(data.response)
       } catch (cause) {
         const msg = cause instanceof Error ? cause.message : String(cause)
-        throw new Error(`Ollama returned invalid JSON: ${msg} — raw: ${data.response.slice(0, 500)}`)
+        throw new Error(
+          `Ollama returned invalid JSON: ${msg} — raw: ${data.response.slice(0, 500)}`
+        )
       }
 
       return schema.parse(parsed)
@@ -113,20 +135,32 @@ export class OllamaProvider implements LLMProvider {
     } catch (error) {
       const isParseError =
         error instanceof SyntaxError ||
-        (error instanceof z.ZodError) ||
-        (error instanceof Error && error.message.startsWith('Ollama returned invalid JSON'))
+        error instanceof z.ZodError ||
+        (error instanceof Error &&
+          error.message.startsWith('Ollama returned invalid JSON'))
 
       if (!isParseError) throw error
 
-      const detail = error instanceof z.ZodError ? z.prettifyError(error) : error instanceof Error ? error.message : String(error)
+      const detail =
+        error instanceof z.ZodError
+          ? z.prettifyError(error)
+          : error instanceof Error
+            ? error.message
+            : String(error)
       const retryPrompt = `${basePrompt}\n\nYour previous output was not valid JSON for the schema: ${detail}. Fix it and return ONLY valid JSON.`
 
       try {
         return await attempt(retryPrompt)
       } catch (retryError) {
         const retryDetail =
-          retryError instanceof z.ZodError ? z.prettifyError(retryError) : retryError instanceof Error ? retryError.message : String(retryError)
-        throw new Error(`Failed to parse structured response after retry: ${retryDetail}`)
+          retryError instanceof z.ZodError
+            ? z.prettifyError(retryError)
+            : retryError instanceof Error
+              ? retryError.message
+              : String(retryError)
+        throw new Error(
+          `Failed to parse structured response after retry: ${retryDetail}`
+        )
       }
     }
   }
