@@ -1,11 +1,5 @@
 'use client'
-import {
-  Check,
-  CopyIcon,
-  ShareIcon,
-  ChevronDown,
-  Brain,
-} from 'lucide-react'
+import { Check, CopyIcon, ShareIcon, ChevronDown, Brain } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import type { AssistantMessage as AssistantMessageType } from '@/lib/agent/schemas/message'
 import { getEventMeta } from '@/lib/agent/eventMap'
@@ -164,16 +158,130 @@ export function AssistantMessage({
               ease: [0.22, 1, 0.36, 1],
               delay: 0.18,
             }}
-            className="flex min-h-14 flex-col justify-center rounded-2xl bg-zinc-900 p-4"
+            className="flex min-h-14 flex-col gap-4 rounded-2xl bg-zinc-900 p-4"
           >
             {isError && message.error ? (
               <p className="text-sm leading-relaxed text-red-400">
                 {message.error}
               </p>
             ) : (
-              <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">
-                {text}
-              </p>
+              <>
+                <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">
+                  {text}
+                </p>
+
+                {message.report && (
+                  <div className="flex flex-col gap-4 border-t border-zinc-800 pt-4">
+                    {message.report.findings.length > 0 && (
+                      <div>
+                        <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                          Findings
+                        </h4>
+                        <ul className="flex flex-col gap-1.5">
+                          {message.report.findings.map((f, idx) => (
+                            <li
+                              key={idx}
+                              className="text-sm leading-relaxed text-zinc-200"
+                            >
+                              <span className="text-zinc-500">· </span>
+                              {f}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {message.report.claims.length > 0 && (
+                      <div>
+                        <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                          Evidence-backed claims
+                        </h4>
+                        <ul className="flex flex-col gap-2">
+                          {message.report.claims.map((c, idx) => (
+                            <li
+                              key={idx}
+                              className="rounded-lg bg-zinc-800/60 px-3 py-2"
+                            >
+                              <p className="text-sm leading-relaxed text-zinc-200">
+                                {c.statement}
+                              </p>
+                              <span className="mt-1 inline-flex items-center gap-2 text-xs text-zinc-500">
+                                confidence {(c.confidence * 100).toFixed(0)}% ·
+                                {c.citations.map((sid) => {
+                                  const src = message.report!.sources.find(
+                                    (s) => s.sourceId === sid
+                                  )
+                                  return src ? (
+                                    <a
+                                      key={sid}
+                                      href={src.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="underline decoration-zinc-600 underline-offset-2 hover:text-zinc-300"
+                                      title={src.title}
+                                    >
+                                      {src.title.slice(0, 32)}
+                                    </a>
+                                  ) : null
+                                })}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {message.report.conflictingEvidence &&
+                      message.report.conflictingEvidence.toLowerCase() !==
+                        'no conflicts' &&
+                      message.report.conflictingEvidence.toLowerCase() !==
+                        'no conflicts — all sources agree' &&
+                      message.report.conflictingEvidence.trim() !== '' && (
+                        <div className="rounded-lg bg-amber-950/30 px-3 py-2 ring-1 ring-amber-900/30">
+                          <h4 className="mb-1 text-xs font-semibold text-amber-300">
+                            Conflicting evidence
+                          </h4>
+                          <p className="text-xs leading-relaxed text-zinc-300">
+                            {message.report.conflictingEvidence}
+                          </p>
+                        </div>
+                      )}
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div>
+                        <h4 className="mb-1 text-xs font-semibold text-zinc-500">
+                          Limitations
+                        </h4>
+                        <p className="text-xs leading-relaxed text-zinc-400">
+                          {message.report.limitations}
+                        </p>
+                      </div>
+                      {message.report.sources.length > 0 && (
+                        <div>
+                          <h4 className="mb-1 text-xs font-semibold text-zinc-500">
+                            Sources · {message.report.sources.length}
+                          </h4>
+                          <ul className="flex flex-col gap-1">
+                            {message.report.sources.map((s) => (
+                              <li key={s.sourceId} className="truncate">
+                                <a
+                                  href={s.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs text-zinc-400 underline decoration-zinc-700 underline-offset-2 hover:text-zinc-200"
+                                  title={s.title}
+                                >
+                                  {s.title}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </motion.div>
         )}

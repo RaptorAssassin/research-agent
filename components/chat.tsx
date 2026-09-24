@@ -12,14 +12,15 @@ export function Chat() {
 
   if (messages.length === 0) {
     return (
-      <div className="h-full flex flex-col items-center justify-start gap-2 w-full md:max-w-2/3 pt-8">
-        <p className="text-sm text-zinc-500 mt-12">No messages yet</p>
+      <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12">
+        <p className="text-sm text-zinc-500">No messages yet</p>
+        <p className="text-xs text-zinc-600">Try a research task below</p>
       </div>
     )
   }
 
   return (
-    <div className="h-full flex flex-col items-center justify-start gap-2 w-full md:max-w-2/3 pt-8 overflow-y-auto pb-32">
+    <div className="flex flex-1 flex-col gap-2 overflow-y-auto pt-6 pb-4">
       {messages.map((message) =>
         message.role === 'user' ? (
           <UserMessage key={message.id} message={message.content} />
@@ -27,7 +28,7 @@ export function Chat() {
           <AssistantMessage key={message.id} message={message} />
         )
       )}
-      <div ref={bottomRef} className="h-0" />
+      <div ref={bottomRef} className="h-2 shrink-0" />
     </div>
   )
 }

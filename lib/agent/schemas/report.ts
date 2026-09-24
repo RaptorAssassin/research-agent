@@ -3,12 +3,18 @@ import { z } from 'zod'
 export const ReportSchema = z.object({
   executiveSummary: z
     .string()
-    .min(1)
-    .describe('2-3 sentence overview of answer + confidence'),
+    .min(80)
+    .max(1200)
+    .describe(
+      'Detailed 4-6 sentence answer: direct answer + context, historical/geographic significance, and confidence. Must be evidence-backed, 90-180 words.'
+    ),
   findings: z
-    .array(z.string())
-    .min(1)
-    .describe('3-5 key findings, each evidence-backed'),
+    .array(z.string().min(20).max(400))
+    .min(3)
+    .max(7)
+    .describe(
+      '5-7 detailed findings, each 1-2 sentences with concrete facts, numbers, dates, and context — not just the direct answer'
+    ),
   claims: z
     .array(
       z.object({
