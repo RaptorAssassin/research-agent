@@ -12,9 +12,11 @@ export function UserMessage({ message }: { message: string }) {
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1] }}
-      className="mt-4 max-w-2/3 self-end rounded-2xl bg-zinc-900 p-4"
+      className="mt-4 max-w-2/3 self-end rounded-2xl bg-zinc-900 p-4 wrap-break-word"
     >
-      {message}
+      <span className="min-w-0 wrap-break-word whitespace-pre-wrap">
+        {message}
+      </span>
     </motion.div>
   )
 }
@@ -55,11 +57,11 @@ export function AssistantMessage({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
       layout
-      className="flex max-w-4/5 flex-col gap-1.5 self-start"
+      className="flex max-w-4/5 min-w-0 flex-col gap-1.5 self-start"
     >
       <motion.div
         layout
-        className="mt-4 overflow-hidden rounded-2xl bg-zinc-900 ring-1 ring-zinc-800"
+        className="mt-4 max-w-full min-w-0 overflow-hidden rounded-2xl bg-zinc-900 ring-1 ring-zinc-800"
       >
         <button
           type="button"
@@ -84,7 +86,7 @@ export function AssistantMessage({
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-zinc-500" />
                 {isThinkingExpanded
                   ? `${message.events.length} steps`
-                  : `${message.events.length} events`}
+                  : `${message.events.length} steps`}
               </span>
             ) : (
               <span className="text-xs text-zinc-500">
@@ -158,30 +160,30 @@ export function AssistantMessage({
               ease: [0.22, 1, 0.36, 1],
               delay: 0.18,
             }}
-            className="flex min-h-14 flex-col gap-4 rounded-2xl bg-zinc-900 p-4"
+            className="flex min-h-14 max-w-full min-w-0 flex-col gap-4 overflow-hidden rounded-2xl bg-zinc-900 p-4"
           >
             {isError && message.error ? (
-              <p className="text-sm leading-relaxed text-red-400">
+              <p className="min-w-0 text-sm leading-relaxed [overflow-wrap:anywhere] break-words text-red-400">
                 {message.error}
               </p>
             ) : (
               <>
-                <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">
+                <p className="min-w-0 text-sm leading-relaxed [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
                   {text}
                 </p>
 
                 {message.report && (
-                  <div className="flex flex-col gap-4 border-t border-zinc-800 pt-4">
+                  <div className="flex max-w-full min-w-0 flex-col gap-4 overflow-hidden border-t border-zinc-800 pt-4">
                     {message.report.findings.length > 0 && (
-                      <div>
-                        <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                      <div className="min-w-0 overflow-hidden">
+                        <h4 className="mb-1.5 text-xs font-semibold tracking-wider text-zinc-400 uppercase">
                           Findings
                         </h4>
-                        <ul className="flex flex-col gap-1.5">
+                        <ul className="flex min-w-0 flex-col gap-1.5">
                           {message.report.findings.map((f, idx) => (
                             <li
                               key={idx}
-                              className="text-sm leading-relaxed text-zinc-200"
+                              className="min-w-0 text-sm leading-relaxed [overflow-wrap:anywhere] break-words text-zinc-200"
                             >
                               <span className="text-zinc-500">· </span>
                               {f}
@@ -192,21 +194,24 @@ export function AssistantMessage({
                     )}
 
                     {message.report.claims.length > 0 && (
-                      <div>
-                        <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                      <div className="min-w-0 overflow-hidden">
+                        <h4 className="mb-1.5 text-xs font-semibold tracking-wider text-zinc-400 uppercase">
                           Evidence-backed claims
                         </h4>
                         <ul className="flex flex-col gap-2">
                           {message.report.claims.map((c, idx) => (
                             <li
                               key={idx}
-                              className="rounded-lg bg-zinc-800/60 px-3 py-2"
+                              className="min-w-0 overflow-hidden rounded-lg bg-zinc-800/60 px-3 py-2"
                             >
-                              <p className="text-sm leading-relaxed text-zinc-200">
+                              <p className="min-w-0 text-sm leading-relaxed [overflow-wrap:anywhere] break-words text-zinc-200">
                                 {c.statement}
                               </p>
-                              <span className="mt-1 inline-flex items-center gap-2 text-xs text-zinc-500">
-                                confidence {(c.confidence * 100).toFixed(0)}% ·
+                              <span className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-zinc-500">
+                                <span className="shrink-0">
+                                  confidence {(c.confidence * 100).toFixed(0)}%
+                                  ·
+                                </span>
                                 {c.citations.map((sid) => {
                                   const src = message.report!.sources.find(
                                     (s) => s.sourceId === sid
@@ -217,8 +222,8 @@ export function AssistantMessage({
                                       href={src.url}
                                       target="_blank"
                                       rel="noreferrer"
-                                      className="underline decoration-zinc-600 underline-offset-2 hover:text-zinc-300"
-                                      title={src.title}
+                                      className="inline-block max-w-full truncate align-middle text-xs underline decoration-zinc-600 underline-offset-2 hover:text-zinc-300"
+                                      title={`${src.title} — ${src.url}`}
                                     >
                                       {src.title.slice(0, 32)}
                                     </a>
@@ -237,42 +242,51 @@ export function AssistantMessage({
                       message.report.conflictingEvidence.toLowerCase() !==
                         'no conflicts — all sources agree' &&
                       message.report.conflictingEvidence.trim() !== '' && (
-                        <div className="rounded-lg bg-amber-950/30 px-3 py-2 ring-1 ring-amber-900/30">
+                        <div className="min-w-0 overflow-hidden rounded-lg bg-amber-950/30 px-3 py-2 ring-1 ring-amber-900/30">
                           <h4 className="mb-1 text-xs font-semibold text-amber-300">
                             Conflicting evidence
                           </h4>
-                          <p className="text-xs leading-relaxed text-zinc-300">
+                          <p className="min-w-0 text-xs leading-relaxed [overflow-wrap:anywhere] break-words text-zinc-300">
                             {message.report.conflictingEvidence}
                           </p>
                         </div>
                       )}
 
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div>
+                    <div className="grid min-w-0 gap-3 overflow-hidden md:grid-cols-2">
+                      <div className="min-w-0 overflow-hidden">
                         <h4 className="mb-1 text-xs font-semibold text-zinc-500">
                           Limitations
                         </h4>
-                        <p className="text-xs leading-relaxed text-zinc-400">
+                        <p className="min-w-0 text-xs leading-relaxed [overflow-wrap:anywhere] break-words text-zinc-400">
                           {message.report.limitations}
                         </p>
                       </div>
                       {message.report.sources.length > 0 && (
-                        <div>
+                        <div className="min-w-0 overflow-hidden">
                           <h4 className="mb-1 text-xs font-semibold text-zinc-500">
                             Sources · {message.report.sources.length}
                           </h4>
-                          <ul className="flex flex-col gap-1">
+                          <ul className="flex min-w-0 flex-col gap-1 overflow-hidden">
                             {message.report.sources.map((s) => (
-                              <li key={s.sourceId} className="truncate">
+                              <li
+                                key={s.sourceId}
+                                className="min-w-0 overflow-hidden"
+                              >
                                 <a
                                   href={s.url}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="text-xs text-zinc-400 underline decoration-zinc-700 underline-offset-2 hover:text-zinc-200"
-                                  title={s.title}
+                                  className="block max-w-full truncate text-xs text-zinc-400 underline decoration-zinc-700 underline-offset-2 hover:text-zinc-200"
+                                  title={`${s.title} — ${s.url}`}
                                 >
                                   {s.title}
                                 </a>
+                                <span
+                                  className="block max-w-full truncate text-[11px] leading-tight [overflow-wrap:anywhere] text-zinc-600"
+                                  title={s.url}
+                                >
+                                  {s.url}
+                                </span>
                               </li>
                             ))}
                           </ul>

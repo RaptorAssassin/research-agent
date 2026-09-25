@@ -3,17 +3,15 @@ import { z } from 'zod'
 export const ReportSchema = z.object({
   executiveSummary: z
     .string()
-    .min(80)
-    .max(1200)
+    .min(1)
     .describe(
-      'Detailed 4-6 sentence answer: direct answer + context, historical/geographic significance, and confidence. Must be evidence-backed, 90-180 words.'
+      'Main answer. Model decides length: 1 short paragraph for trivial facts, multiple structured paragraphs (with blank-line separation) for complex explanations. Use as many paragraphs as needed; may be very long. Must be evidence-backed.'
     ),
   findings: z
-    .array(z.string().min(20).max(400))
-    .min(3)
-    .max(7)
+    .array(z.string().min(1))
+    .min(1)
     .describe(
-      '5-7 detailed findings, each 1-2 sentences with concrete facts, numbers, dates, and context — not just the direct answer'
+      'Key findings: model decides count and length. 2-4 concise bullets for simple queries, many detailed bullets or short paragraphs for complex topics. Each item can be multi-sentence.'
     ),
   claims: z
     .array(

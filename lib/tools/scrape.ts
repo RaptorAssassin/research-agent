@@ -52,24 +52,76 @@ export class SimpleScrapeProvider implements ScrapeProvider {
     this.maxChars = opts.maxChars ?? 12000
   }
 
+  private headersFor(url: string, attempt: number): Record<string, string> {
+    const base: Record<string, string> = {
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/pdf;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9,de;q=0.7",
+      "Accept-Encoding": "gzip, deflate, br",
+      "Cache-Control": "no-cache",
+      Pragma: "no-cache",
+      "Upgrade-Insecure-Requests": "1",
+      "Sec-Fetch-Dest": "document",
+      "Sec-Fetch-Mode": "navigate",
+      "Sec-Fetch-Site": "none",
+      "Sec-Fetch-User": "?1",
+    }
+    if (attempt === 0) {
+      return {
+        ...base,
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+      }
+    }
+    return {
+      ...base,
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+      Referer: "https://www.google.com/",
+    }
+  }
+
   async scrapePage(url: string): Promise<string> {
-    let response: Response
-    try {
-      response = await fetch(url, {
-        headers: {
-          "User-Agent": "research-agent/0.1 (+https://github.com/research-agent)",
-          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,application/pdf;q=0.8,*/*;q=0.5",
-          "Accept-Language": "en-US,en;q=0.9",
-        },
-        signal: AbortSignal.timeout(this.timeoutMs),
-        redirect: "follow",
-      })
-    } catch (cause) {
-      throw new Error(`Scrape fetch failed for ${url}: ${cause instanceof Error ? cause.message : String(cause)}`)
+    let response: Response | null = null
+    let lastErr = ""
+    const maxAttempts = 2
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        response = await fetch(url, {
+          headers: this.headersFor(url, attempt),
+          signal: AbortSignal.timeout(this.timeoutMs),
+          redirect: "follow",
+        })
+      } catch (cause) {
+        lastErr = cause instanceof Error ? cause.message : String(cause)
+        const isTimeout = lastErr.toLowerCase().includes("timeout") || lastErr.toLowerCase().includes("aborted")
+        if (isTimeout && attempt < maxAttempts - 1) {
+          await new Promise((r) => setTimeout(r, 400 * (attempt + 1)))
+          continue
+        }
+        throw new Error(`Scrape fetch failed for ${url}: ${lastErr}`)
+      }
+
+      if (response.ok) break
+
+      const status = response.status
+      lastErr = `${status} ${response.statusText}`
+
+      const retryable = [403, 429, 502, 503, 504].includes(status)
+      if (retryable && attempt < maxAttempts - 1) {
+        const backoff = status === 403 ? 600 : status === 429 ? 1200 : 700
+        let bodyHint = ""
+        try {
+          bodyHint = (await response.clone().text()).slice(0, 200)
+        } catch {}
+        console.warn(`[scrape] ${status} for ${url} — retry ${attempt + 1}/${maxAttempts - 1} hint: ${bodyHint.slice(0, 80)}`)
+        await new Promise((r) => setTimeout(r, backoff * (attempt + 1)))
+        continue
+      }
+
+      throw new Error(`Scrape failed ${status} ${response.statusText} for ${url}`)
     }
 
-    if (!response.ok) {
-      throw new Error(`Scrape failed ${response.status} ${response.statusText} for ${url}`)
+    if (!response) {
+      throw new Error(`Scrape failed: no response for ${url} — last: ${lastErr}`)
     }
 
     const contentType = (response.headers.get("content-type") ?? "").toLowerCase()

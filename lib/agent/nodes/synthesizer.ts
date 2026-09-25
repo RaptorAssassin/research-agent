@@ -8,8 +8,8 @@ export type SynthesizerDeps = {
 }
 
 const DraftReportSchema = z.object({
-  executiveSummary: z.string().min(80).max(1200),
-  findings: z.array(z.string().min(20).max(400)).min(3).max(7),
+  executiveSummary: z.string().min(1),
+  findings: z.array(z.string()).min(1).max(5),
   claims: z.array(
     z.object({
       statement: z.string().min(1),
@@ -50,23 +50,7 @@ export function createSynthesizerNode(deps: SynthesizerDeps) {
     let draft: z.infer<typeof DraftReportSchema>
     try {
       draft = await deps.llm.structuredGenerate(
-        `Synthesize a comprehensive report for query "${state.query}". Use ONLY provided claims/evidence, do not invent.
-Plan objective: ${state.plan?.objective ?? ''}
-
-Claims:
-${claimsContext}
-
-Evidence (verbatim excerpts):
-${evidenceContext}
-
-Instructions:
-- executiveSummary: 4-6 sentences, 90-180 words. Start with direct answer, then add geographic/historical/political context, significance, and confidence nuance. For trivial facts (e.g. "capital of Germany") still provide context: why Berlin (history since 1990 reunification), population/district, role as seat of parliament/Bundestag, cultural significance. Do not embed source titles or URLs inline; cite via claims only.
-- findings: 5-7 detailed findings. Each 1-2 sentences with specific facts, numbers, dates, names from evidence where possible. Go beyond the direct answer: include history, demographics, geography, governance, and relevance. No one-word bullets. Do not prefix findings with source titles like "Title | Site:" — write findings as standalone statements.
-- claims: copy verbatim from provided Claims (statement + confidence). Do not rephrase.
-- conflictingEvidence: explicit summary or "No conflicts — all sources agree" if none.
-- limitations: note freshness, source quality, gaps (1-2 sentences).
-
-Respond ONLY JSON per schema.`,
+        `Synthesize report for query "${state.query}". Use ONLY provided claims/evidence, do not invent. Plan: ${state.plan?.objective ?? ''}\n\nClaims:\n${claimsContext}\n\nEvidence:\n${evidenceContext}\n\nProduce executiveSummary 2-3 sentences, findings 3-5 bullets, claims copied verbatim from Clzaims with confidence, conflictingEvidence explicit (or "No conflicts"), limitations (sources freshness/quality gaps). Respond ONLY JSON.`,
         DraftReportSchema
       )
     } catch (err) {
@@ -76,45 +60,14 @@ Respond ONLY JSON per schema.`,
       const fallbackClaims = pool
         .slice(0, 3)
         .map((c) => ({ statement: c.statement, confidence: c.confidence }))
-
-      const cleanSnippet = (s: string) => {
-        const lastColon = s.lastIndexOf(': ')
-        let cleaned =
-          lastColon > 10 && lastColon < s.length - 15
-            ? s.slice(lastColon + 2).trim()
-            : s
-        cleaned = cleaned.replace(/\s+/g, ' ').trim()
-        if (cleaned.length > 220) cleaned = cleaned.slice(0, 220).trimEnd() + '…'
-        return cleaned
-      }
-
-      const firstClean = fallbackClaims[0]
-        ? cleanSnippet(fallbackClaims[0].statement)
-        : ''
-
       draft = {
-        executiveSummary: firstClean
-          ? `Research on "${state.query}" found ${state.sources.length} sources and ${state.claims.length} claims. ${firstClean} Confidence is moderate — evidence is snippet-only and the query was broad. Review findings and cited sources for details.`
-          : `Research on "${state.query}" found ${state.sources.length} sources and ${state.claims.length} claims. Confidence is moderate — evidence is snippet-only; see findings and sources for details.`,
-        findings: (() => {
-          const cleaned = fallbackClaims.map((c) => {
-            const s = cleanSnippet(c.statement)
-            return s.length < 20 ? c.statement.slice(0, 200) : s
-          })
-          while (cleaned.length < 3) {
-            cleaned.push(
-              cleaned.length === 0
-                ? `No strong claims extracted for "${state.query}" — evidence was sparse.`
-                : `Additional evidence from ${state.sources.length} sources supports the summary; check citations.`
-            )
-          }
-          return cleaned.slice(0, 5)
-        })(),
+        executiveSummary: `Research on "${state.query}" based on ${state.sources.length} sources and ${state.claims.length} claims. Confidence moderate.`,
+        findings: fallbackClaims.map((c) => c.statement),
         claims: fallbackClaims,
         conflictingEvidence:
           'No explicit conflicts detected; evidence coverage limited.',
         limitations:
-          'LLM fallback used; limited to scraped snippets; some sources may be stale or low-credibility. Verify via cited sources.',
+          'Limited to scraped snippets; some sources may be stale or low-credibility.',
       }
     }
 

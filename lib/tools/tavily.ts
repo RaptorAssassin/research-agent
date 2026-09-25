@@ -84,24 +84,61 @@ export class TavilySearchProvider implements SearchProvider {
       headers["X-Tavily-Access-Mode"] = "keyless"
     }
 
-    let response: Response
-    try {
-      response = await fetch(`${this.baseUrl}/search`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-      })
-    } catch (cause) {
-      throw new Error(`Tavily search failed: ${cause instanceof Error ? cause.message : String(cause)}`)
-    }
+    const maxRetries = 2
+    let response: Response | null = null
+    let lastDetail = ""
 
-    if (!response.ok) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        response = await fetch(`${this.baseUrl}/search`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(body),
+        })
+      } catch (cause) {
+        const msg = cause instanceof Error ? cause.message : String(cause)
+        if (attempt < maxRetries) {
+          await new Promise((r) => setTimeout(r, 600 * (attempt + 1)))
+          continue
+        }
+        throw new Error(`Tavily search failed: ${msg}`)
+      }
+
+      if (response.ok) break
+
       let detail = ""
       try {
-        const errJson = (await response.json()) as { detail?: { error?: string }; error?: string }
-        detail = errJson?.detail?.error ?? errJson?.error ?? JSON.stringify(errJson)
+        const errJson = (await response.json()) as {
+          detail?: unknown
+          error?: unknown
+          message?: unknown
+        }
+        const rawDetail = (errJson as Record<string, unknown>)?.detail
+        const nestedError =
+          typeof rawDetail === 'object' && rawDetail !== null
+            ? (rawDetail as Record<string, unknown>).error
+            : undefined
+        const pick =
+          (typeof nestedError === 'string' ? nestedError : undefined) ??
+          (typeof errJson.error === 'string' ? errJson.error : undefined) ??
+          (typeof errJson.message === 'string' ? errJson.message : undefined)
+        if (pick) detail = pick
+        else if (typeof errJson.detail === 'string') detail = errJson.detail
+        else detail = JSON.stringify(errJson)
       } catch {
-        detail = await response.text().catch(() => "")
+        try {
+          detail = await response.text()
+        } catch {
+          detail = ""
+        }
+      }
+      lastDetail = detail
+
+      const retryable = [429, 502, 503, 504].includes(response.status)
+      if (retryable && attempt < maxRetries) {
+        const backoff = response.status === 429 ? 1200 : 700
+        await new Promise((r) => setTimeout(r, backoff * (attempt + 1)))
+        continue
       }
 
       if (response.status === 432) {
@@ -111,10 +148,14 @@ export class TavilySearchProvider implements SearchProvider {
         throw new Error(`Tavily pay-go limit exceeded (433): ${detail}`)
       }
       if (response.status === 429) {
-        throw new Error(`Tavily rate limited (429): ${detail} — free tier ~1 req/s, standard ~30 req/min. Add backoff/retry.`)
+        throw new Error(`Tavily rate limited (429): ${detail} — free tier ~1 req/s, standard ~30 req/min. Retried ${maxRetries}×.`)
       }
 
-      throw new Error(`Tavily search failed ${response.status}: ${detail}`)
+      throw new Error(`Tavily search failed ${response.status}: ${detail || response.statusText}`)
+    }
+
+    if (!response) {
+      throw new Error(`Tavily search failed: no response after ${maxRetries} retries — last: ${lastDetail}`)
     }
 
     let json: unknown
