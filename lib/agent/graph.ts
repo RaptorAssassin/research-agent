@@ -1,6 +1,6 @@
 import { StateGraph, START, END } from '@langchain/langgraph'
 import { ResearchState } from './state'
-import { OllamaProvider } from '@/lib/llm/ollama'
+import { OpenAICompatibleProvider } from '@/lib/llm/openai-compatible'
 import type { LLMProvider } from '@/lib/llm/provider'
 import { TavilySearchProvider } from '@/lib/tools/tavily'
 import { SimpleScrapeProvider } from '@/lib/tools/scrape'
@@ -24,22 +24,31 @@ export type GraphDeps = {
   maxIterations?: number
 }
 
+function resolveModel(tier: 'CHEAP' | 'STRONG'): string {
+  const model =
+    (tier === 'CHEAP'
+      ? (process.env.OPENAI_COMPATIBLE_CHEAP_MODEL ??
+        process.env.OPENAI_COMPATIBLE_MODEL)
+      : (process.env.OPENAI_COMPATIBLE_STRONG_MODEL ??
+        process.env.OPENAI_COMPATIBLE_MODEL)) ?? ''
+  if (!model.trim()) {
+    throw new Error(
+      `Missing OPENAI_COMPATIBLE_${tier}_MODEL (or OPENAI_COMPATIBLE_MODEL fallback) — copy .env.example to .env.local and set it`
+    )
+  }
+  return model.trim()
+}
+
 function defaultCheapLLM(): LLMProvider {
-  return new OllamaProvider({
-    model:
-      process.env.OLLAMA_CHEAP_MODEL ??
-      process.env.OLLAMA_MODEL ??
-      'gemma4:12b',
+  return new OpenAICompatibleProvider({
+    model: resolveModel('CHEAP'),
     temperature: 0.3,
   })
 }
 
 function defaultStrongLLM(): LLMProvider {
-  return new OllamaProvider({
-    model:
-      process.env.OLLAMA_STRONG_MODEL ??
-      process.env.OLLAMA_MODEL ??
-      'gemma4:12b',
+  return new OpenAICompatibleProvider({
+    model: resolveModel('STRONG'),
     temperature: 0.2,
   })
 }
@@ -56,7 +65,7 @@ export function buildGraph(deps: GraphDeps = {}) {
     searchProvider,
     scrapeProvider,
   })
-  const sourceEvaluatorNode = createSourceEvaluatorNode({ llm: cheapLLM })
+  const sourceEvaluatorNode = createSourceEvaluatorNode()
   const extractorNode = createExtractorNode({ llm: cheapLLM })
   const factCheckerNode = createFactCheckerNode({ llm: strongLLM })
   const synthesizerNode = createSynthesizerNode({ llm: strongLLM })

@@ -1,5 +1,6 @@
 import { graph, buildGraph, MAX_ITERATIONS } from "@/lib/agent/graph"
 import { createEvent, isStreamMode, type StreamMode } from "@/lib/agent/events"
+import { parseDepth, type Depth } from "@/lib/agent/state"
 import { sseEncode, sseEncodeDone } from "@/lib/agent/runner"
 
 export const runtime = "nodejs"
@@ -10,6 +11,7 @@ export type ResearchRequest = {
   stream?: boolean
   mode?: StreamMode
   maxIterations?: number
+  depth?: Depth
 }
 
 function parseRequest(body: unknown, searchParams: URLSearchParams): ResearchRequest | { error: string } {
@@ -24,14 +26,15 @@ function parseRequest(body: unknown, searchParams: URLSearchParams): ResearchReq
     const stream = typeof b.stream === "boolean" ? b.stream : streamParam === "true"
     const mode = typeof b.mode === "string" && isStreamMode(b.mode) ? (b.mode as StreamMode) : modeParam && isStreamMode(modeParam) ? (modeParam as StreamMode) : undefined
     const maxIterations = typeof b.maxIterations === "number" ? Math.max(0, Math.min(5, Math.round(b.maxIterations))) : undefined
-    return { query, stream, mode, maxIterations }
+    const depth = parseDepth(b.depth ?? searchParams.get("depth"))
+    return { query, stream, mode, maxIterations, depth }
   }
 
   const query = qParam?.trim() ?? ""
   if (!query) return { error: "Missing query (send JSON {query} or ?query=...)" }
   const stream = streamParam === "true"
   const mode = modeParam && isStreamMode(modeParam) ? (modeParam as StreamMode) : undefined
-  return { query, stream, mode, maxIterations: undefined }
+  return { query, stream, mode, maxIterations: undefined, depth: parseDepth(searchParams.get("depth")) }
 }
 
 export async function GET(req: Request) {
@@ -70,6 +73,7 @@ export async function POST(req: Request) {
 async function handleResearch(req: ResearchRequest, originalReq: Request) {
   const query = req.query.slice(0, 1000)
   const maxIterations = req.maxIterations ?? MAX_ITERATIONS
+  const depth = req.depth ?? "standard"
   const wantsStream = req.stream === true || req.mode !== undefined || originalReq.headers.get("accept")?.includes("text/event-stream")
 
   const mode: StreamMode = req.mode ?? (wantsStream ? "sse" : "json")
@@ -78,7 +82,7 @@ async function handleResearch(req: ResearchRequest, originalReq: Request) {
 
   if (mode === "json" && !wantsStream) {
     try {
-      const result = (await activeGraph.invoke({ query, iteration: 0 })) as Record<string, unknown>
+      const result = (await activeGraph.invoke({ query, iteration: 0, depth })) as Record<string, unknown>
       return Response.json(result, { headers: { "Cache-Control": "no-store" } })
     } catch (err) {
       return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })
@@ -94,7 +98,7 @@ async function handleResearch(req: ResearchRequest, originalReq: Request) {
       try {
         if (mode === "values" || mode === "updates") {
           const streamMode = mode as "values" | "updates"
-          const gen = await (activeGraph.stream as unknown as (input: unknown, opts: unknown) => Promise<AsyncIterable<unknown>>)({ query, iteration: 0 }, { streamMode })
+          const gen = await (activeGraph.stream as unknown as (input: unknown, opts: unknown) => Promise<AsyncIterable<unknown>>)({ query, iteration: 0, depth }, { streamMode })
           for await (const chunk of gen) {
             if (originalReq.signal.aborted) break
             if (mode === "values") {
@@ -112,7 +116,7 @@ async function handleResearch(req: ResearchRequest, originalReq: Request) {
         }
 
         if (mode === "events") {
-          for await (const chunk of eventsFromGraph(activeGraph, query)) {
+          for await (const chunk of eventsFromGraph(activeGraph, query, depth)) {
             if (originalReq.signal.aborted) break
             enqueue(`${JSON.stringify(chunk)}\n`)
           }
@@ -120,7 +124,7 @@ async function handleResearch(req: ResearchRequest, originalReq: Request) {
           return
         }
 
-        for await (const ev of eventsFromGraph(activeGraph, query)) {
+        for await (const ev of eventsFromGraph(activeGraph, query, depth)) {
           if (originalReq.signal.aborted) break
           enqueue(sseEncode(ev))
         }
@@ -171,8 +175,9 @@ function mapNodeToEventType(node: string): import("@/lib/agent/events").AgentEve
 async function* eventsFromGraph(
   activeGraph: typeof graph,
   query: string,
+  depth: Depth,
 ): AsyncGenerator<import("@/lib/agent/events").AgentEvent> {
-  const gen = await (activeGraph.stream as unknown as (input: unknown, opts: unknown) => Promise<AsyncIterable<Record<string, unknown>>>)({ query, iteration: 0 }, { streamMode: "updates" })
+  const gen = await (activeGraph.stream as unknown as (input: unknown, opts: unknown) => Promise<AsyncIterable<Record<string, unknown>>>)({ query, iteration: 0, depth }, { streamMode: "updates" })
   for await (const chunk of gen) {
     const nodeName = Object.keys(chunk)[0]
     const data = chunk[nodeName] as { iteration?: number } & Record<string, unknown>

@@ -8,5 +8,6 @@ export interface LLMProvider {
 export type LLMOptions = {
     model?: string
     baseUrl?: string
+    apiKey?: string
     temperature?: number
 }

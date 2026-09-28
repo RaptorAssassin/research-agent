@@ -11,6 +11,9 @@ export function createPlannerNode(deps: PlannerDeps) {
 
   return async (state: typeof ResearchState.State): Promise<{ plan: ResearchPlan }> => {
     const query = state.query.trim()
+    const depth = state.depth ?? 'standard'
+    const subtaskRange = depth === 'brief' ? '2-3' : depth === 'deep' ? '4-6' : '3-5'
+    const subtaskCap = depth === 'brief' ? 3 : depth === 'deep' ? 6 : 5
     if (!query) {
       return {
         plan: {
@@ -22,10 +25,10 @@ export function createPlannerNode(deps: PlannerDeps) {
 
     try {
       const plan = await llm.structuredGenerate(
-        `Create a research plan for query: "${query}". Objective should restate the query concisely. Subtasks should be 3-5 concrete search topics (each 4-10 words) covering different angles. Respond ONLY with JSON.`,
+        `Create a research plan for query: "${query}". Objective should restate the query concisely. Subtasks should be ${subtaskRange} concrete search topics (each 4-10 words) covering different angles. Respond ONLY with JSON.`,
         ResearchPlanSchema,
       )
-      const subtasks = plan.subtasks.slice(0, 5)
+      const subtasks = plan.subtasks.slice(0, subtaskCap)
       if (subtasks.length < 1) throw new Error("Empty subtasks")
       return { plan: { objective: plan.objective, subtasks } }
     } catch {

@@ -37,12 +37,15 @@ export function createResearcherNode(deps: ResearcherDeps) {
     const isLoop = state.iteration > 0 && state.evaluation?.followUpQuestions && state.evaluation.followUpQuestions.length > 0
     const queries = isLoop ? state.evaluation!.followUpQuestions.slice(0, 3) : state.plan.subtasks
 
+    const searchErrors: string[] = []
     const previewsPerTask = await Promise.all(
       queries.map(async (subtask) => {
         try {
           return await searchProvider.searchWeb(subtask)
         } catch (error) {
-          console.warn(`[researcher] searchWeb failed for "${subtask}": ${error instanceof Error ? error.message : String(error)}`)
+          const message = error instanceof Error ? error.message : String(error)
+          searchErrors.push(`${subtask}: ${message}`)
+          console.warn(`[researcher] searchWeb failed for "${subtask}": ${message}`)
           return [] as SourcePreview[]
         }
       }),
@@ -50,6 +53,9 @@ export function createResearcherNode(deps: ResearcherDeps) {
 
     const flat = previewsPerTask.flat()
     if (flat.length === 0) {
+      if (searchErrors.length === queries.length && queries.length > 0) {
+        throw new Error(`All ${queries.length} search queries failed — ${searchErrors.join(" | ")}`)
+      }
       return {
         sources: [] as Source[],
         iteration: state.iteration + 1,
@@ -70,8 +76,9 @@ export function createResearcherNode(deps: ResearcherDeps) {
         try {
           content = await scrapeProvider.scrapePage(preview.url)
         } catch (error) {
-          console.warn(`[researcher] scrapePage failed for ${preview.url}: ${error instanceof Error ? error.message : String(error)} — falling back to snippet`)
-          content = preview.snippet
+          const snippetLength = preview.snippet?.length ?? 0
+          console.warn(`[researcher] scrapePage failed for ${preview.url}: ${error instanceof Error ? error.message : String(error)} — falling back to snippet (${snippetLength} chars)`)
+          content = preview.snippet ?? preview.title
         }
 
         const source: Source = {

@@ -43,13 +43,25 @@ async function parsePdfBuffer(buffer: ArrayBuffer, maxChars: number): Promise<st
   }
 }
 
+function resolveScrapeTimeoutMs(): number {
+  const raw = process.env.SCRAPE_TIMEOUT_MS ? Number(process.env.SCRAPE_TIMEOUT_MS) : NaN
+  if (!Number.isFinite(raw)) return 12000
+  return Math.max(1000, Math.min(60000, Math.round(raw)))
+}
+
+function resolveScrapeMaxChars(): number {
+  const raw = process.env.SCRAPE_MAX_CHARS ? Number(process.env.SCRAPE_MAX_CHARS) : NaN
+  if (!Number.isFinite(raw)) return 12000
+  return Math.max(1000, Math.min(50000, Math.round(raw)))
+}
+
 export class SimpleScrapeProvider implements ScrapeProvider {
   private readonly timeoutMs: number
   private readonly maxChars: number
 
   constructor(opts: { timeoutMs?: number; maxChars?: number } = {}) {
-    this.timeoutMs = opts.timeoutMs ?? 12000
-    this.maxChars = opts.maxChars ?? 12000
+    this.timeoutMs = opts.timeoutMs ?? resolveScrapeTimeoutMs()
+    this.maxChars = opts.maxChars ?? resolveScrapeMaxChars()
   }
 
   private headersFor(url: string, attempt: number): Record<string, string> {
@@ -105,7 +117,7 @@ export class SimpleScrapeProvider implements ScrapeProvider {
       const status = response.status
       lastErr = `${status} ${response.statusText}`
 
-      const retryable = [403, 429, 502, 503, 504].includes(status)
+      const retryable = [400, 403, 429, 502, 503, 504].includes(status)
       if (retryable && attempt < maxAttempts - 1) {
         const backoff = status === 403 ? 600 : status === 429 ? 1200 : 700
         let bodyHint = ""

@@ -78,8 +78,10 @@ export class TavilySearchProvider implements SearchProvider {
       "Content-Type": "application/json",
     }
 
-    if (this.apiKey) {
-      body.api_key = this.apiKey
+    const trimmedKey = this.apiKey.trim()
+    if (trimmedKey) {
+      headers["Authorization"] = `Bearer ${trimmedKey}`
+      body.api_key = trimmedKey
     } else {
       headers["X-Tavily-Access-Mode"] = "keyless"
     }
@@ -141,6 +143,9 @@ export class TavilySearchProvider implements SearchProvider {
         continue
       }
 
+      if (response.status === 401) {
+        throw new Error(`Tavily unauthorized (401): ${detail || "missing or invalid API key"} — set TAVILY_API_KEY=tvly-... in .env.local, or leave it empty for rate-limited keyless mode.`)
+      }
       if (response.status === 432) {
         throw new Error(`Tavily plan limit exceeded (432): ${detail} — free plan is 1000 credits/month (basic=1, advanced=2). Reduce maxResults or wait for monthly reset.`)
       }

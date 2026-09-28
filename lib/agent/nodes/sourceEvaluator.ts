@@ -1,16 +1,5 @@
 import type { Source } from "../schemas/claim"
 import type { ResearchState } from "../state"
-import type { LLMProvider } from "@/lib/llm/provider"
-import { z } from "zod"
-
-export type SourceEvaluatorDeps = {
-  llm?: LLMProvider
-}
-
-const ScoreSchema = z.object({
-  credibility: z.number().min(0).max(1),
-  relevance: z.number().min(0).max(1),
-})
 
 function deterministicSignals(source: Source, query: string): { credibility: number; relevance: number; sourceType: "primary" | "secondary"; freshness: number } {
   const url = source.url.toLowerCase()
@@ -42,40 +31,19 @@ function deterministicSignals(source: Source, query: string): { credibility: num
   return { credibility, relevance, sourceType, freshness }
 }
 
-export function createSourceEvaluatorNode(deps: SourceEvaluatorDeps = {}) {
+export function createSourceEvaluatorNode() {
   return async (state: typeof ResearchState.State): Promise<{ sources: Source[] }> => {
     if (state.sources.length === 0) return { sources: [] }
 
-    const evaluated: Source[] = []
-
-    for (const source of state.sources) {
+    const evaluated = state.sources.map((source) => {
       const det = deterministicSignals(source, state.query)
-
-      if (deps.llm) {
-        try {
-          const scored = await deps.llm.structuredGenerate(
-            `Score source relevance/credibility 0-1 for query "${state.query}". Title: "${source.title}" Snippet: "${(source.snippet ?? "").slice(0, 300)}". Respond ONLY JSON {credibility, relevance}.`,
-            ScoreSchema,
-          )
-          evaluated.push({
-            ...source,
-            credibility: Math.round(((det.credibility * 0.5 + scored.credibility * 0.5) * 100)) / 100,
-            relevance: Math.round(((det.relevance * 0.5 + scored.relevance * 0.5) * 100)) / 100,
-            sourceType: det.sourceType,
-          })
-          continue
-        } catch {
-          // fallback to deterministic
-        }
-      }
-
-      evaluated.push({
+      return {
         ...source,
         credibility: det.credibility,
         relevance: det.relevance,
         sourceType: det.sourceType,
-      })
-    }
+      }
+    })
 
     evaluated.sort((a, b) => ((b.relevance ?? 0) * 0.6 + (b.credibility ?? 0) * 0.4) - ((a.relevance ?? 0) * 0.6 + (a.credibility ?? 0) * 0.4))
 

@@ -9,7 +9,7 @@ export type SynthesizerDeps = {
 
 const DraftReportSchema = z.object({
   executiveSummary: z.string().min(1),
-  findings: z.array(z.string()).min(1).max(5),
+  findings: z.array(z.string()).min(1).max(12),
   claims: z.array(
     z.object({
       statement: z.string().min(1),
@@ -30,17 +30,30 @@ export function createSynthesizerNode(deps: SynthesizerDeps) {
     const pool = supported.length > 0 ? supported : state.claims
     const evidenceById = new Map(state.evidence.map((e) => [e.evidenceId, e]))
     const sourceById = new Map(state.sources.map((s) => [s.sourceId, s]))
+    const depth = state.depth ?? 'standard'
+    const budget =
+      depth === 'brief'
+        ? { evidence: 8, evidenceChars: 250, claims: 6 }
+        : depth === 'deep'
+          ? { evidence: 20, evidenceChars: 600, claims: 16 }
+          : { evidence: 14, evidenceChars: 400, claims: 10 }
+    const shape =
+      depth === 'brief'
+        ? 'executiveSummary 2-3 sentences, findings 2-4 concise bullets'
+        : depth === 'deep'
+          ? 'executiveSummary multiple structured paragraphs with blank-line separation, findings 6-12 detailed bullets or short paragraphs with substantive multi-sentence explanations, written as a full sourced answer'
+          : 'executiveSummary one full paragraph, findings 4-8 detailed bullets or short paragraphs, each multi-sentence where warranted'
 
     const evidenceContext = state.evidence
-      .slice(0, 12)
+      .slice(0, budget.evidence)
       .map((e) => {
         const src = sourceById.get(e.sourceId)
-        return `[${e.evidenceId} src:${e.sourceId} ${src?.title ?? ''}]: "${e.text.slice(0, 300)}"`
+        return `[${e.evidenceId} src:${e.sourceId} ${src?.title ?? ''}]: "${e.text.slice(0, budget.evidenceChars)}"`
       })
       .join('\n')
 
     const claimsContext = pool
-      .slice(0, 8)
+      .slice(0, budget.claims)
       .map(
         (c) =>
           `- ${c.statement} (confidence ${c.confidence}, status ${c.status ?? 'unknown'}, evidence ${c.evidenceIds.join(',')})`
@@ -50,7 +63,7 @@ export function createSynthesizerNode(deps: SynthesizerDeps) {
     let draft: z.infer<typeof DraftReportSchema>
     try {
       draft = await deps.llm.structuredGenerate(
-        `Synthesize report for query "${state.query}". Use ONLY provided claims/evidence, do not invent. Plan: ${state.plan?.objective ?? ''}\n\nClaims:\n${claimsContext}\n\nEvidence:\n${evidenceContext}\n\nProduce executiveSummary 2-3 sentences, findings 3-5 bullets, claims copied verbatim from Clzaims with confidence, conflictingEvidence explicit (or "No conflicts"), limitations (sources freshness/quality gaps). Respond ONLY JSON.`,
+        `Synthesize report for query "${state.query}". Use ONLY provided claims/evidence, do not invent. Plan: ${state.plan?.objective ?? ''}\n\nClaims:\n${claimsContext}\n\nEvidence:\n${evidenceContext}\n\nProduce ${shape}, claims copied verbatim from Clzaims with confidence, conflictingEvidence explicit (or "No conflicts"), limitations (sources freshness/quality gaps). Respond ONLY JSON.`,
         DraftReportSchema
       )
     } catch (err) {
