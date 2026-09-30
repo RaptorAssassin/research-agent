@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { AssistantMessage as AssistantMessageType } from '@/lib/agent/schemas/message'
 import { getEventMeta } from '@/lib/agent/eventMap'
 import { motion, AnimatePresence } from 'motion/react'
+import { Markdown } from './markdown'
 
 export function UserMessage({ message }: { message: string }) {
   return (
@@ -163,136 +164,23 @@ export function AssistantMessage({
             className="flex min-h-14 max-w-full min-w-0 flex-col gap-4 overflow-hidden rounded-2xl bg-zinc-900 p-4"
           >
             {isError && message.error ? (
-              <p className="min-w-0 text-sm leading-relaxed [overflow-wrap:anywhere] break-words text-red-400">
+              <p className="min-w-0 text-sm leading-relaxed wrap-anywhere text-red-400">
                 {message.error}
               </p>
             ) : (
               <>
-                <p className="min-w-0 text-sm leading-relaxed [overflow-wrap:anywhere] break-words whitespace-pre-wrap">
-                  {text}
-                </p>
+                <div className="min-w-0 text-sm leading-relaxed wrap-anywhere">
+                  <Markdown text={text} />
+                </div>
 
                 {message.report && (
-                  <div className="flex max-w-full min-w-0 flex-col gap-4 overflow-hidden border-t border-zinc-800 pt-4">
-                    {message.report.findings.length > 0 && (
-                      <div className="min-w-0 overflow-hidden">
-                        <h4 className="mb-1.5 text-xs font-semibold tracking-wider text-zinc-400 uppercase">
-                          Findings
-                        </h4>
-                        <ul className="flex min-w-0 flex-col gap-1.5">
-                          {message.report.findings.map((f, idx) => (
-                            <li
-                              key={idx}
-                              className="min-w-0 text-sm leading-relaxed [overflow-wrap:anywhere] break-words text-zinc-200"
-                            >
-                              <span className="text-zinc-500">· </span>
-                              {f}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                  <div className="flex max-w-full min-w-0 flex-col gap-2 overflow-hidden border-t border-zinc-800 pt-3">
+                    {message.report.sources.length > 0 && (
+                      <SourcesDropdown
+                        sources={message.report.sources}
+                        conflictingEvidence={message.report.conflictingEvidence}
+                      />
                     )}
-
-                    {message.report.claims.length > 0 && (
-                      <div className="min-w-0 overflow-hidden">
-                        <h4 className="mb-1.5 text-xs font-semibold tracking-wider text-zinc-400 uppercase">
-                          Evidence-backed claims
-                        </h4>
-                        <ul className="flex flex-col gap-2">
-                          {message.report.claims.map((c, idx) => (
-                            <li
-                              key={idx}
-                              className="min-w-0 overflow-hidden rounded-lg bg-zinc-800/60 px-3 py-2"
-                            >
-                              <p className="min-w-0 text-sm leading-relaxed [overflow-wrap:anywhere] break-words text-zinc-200">
-                                {c.statement}
-                              </p>
-                              <span className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5 text-xs text-zinc-500">
-                                <span className="shrink-0">
-                                  confidence {(c.confidence * 100).toFixed(0)}%
-                                  ·
-                                </span>
-                                {c.citations.map((sid) => {
-                                  const src = message.report!.sources.find(
-                                    (s) => s.sourceId === sid
-                                  )
-                                  return src ? (
-                                    <a
-                                      key={sid}
-                                      href={src.url}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="inline-block max-w-full truncate align-middle text-xs underline decoration-zinc-600 underline-offset-2 hover:text-zinc-300"
-                                      title={`${src.title} — ${src.url}`}
-                                    >
-                                      {src.title.slice(0, 32)}
-                                    </a>
-                                  ) : null
-                                })}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {message.report.conflictingEvidence &&
-                      message.report.conflictingEvidence.toLowerCase() !==
-                        'no conflicts' &&
-                      message.report.conflictingEvidence.toLowerCase() !==
-                        'no conflicts — all sources agree' &&
-                      message.report.conflictingEvidence.trim() !== '' && (
-                        <div className="min-w-0 overflow-hidden rounded-lg bg-amber-950/30 px-3 py-2 ring-1 ring-amber-900/30">
-                          <h4 className="mb-1 text-xs font-semibold text-amber-300">
-                            Conflicting evidence
-                          </h4>
-                          <p className="min-w-0 text-xs leading-relaxed [overflow-wrap:anywhere] break-words text-zinc-300">
-                            {message.report.conflictingEvidence}
-                          </p>
-                        </div>
-                      )}
-
-                    <div className="grid min-w-0 gap-3 overflow-hidden md:grid-cols-2">
-                      <div className="min-w-0 overflow-hidden">
-                        <h4 className="mb-1 text-xs font-semibold text-zinc-500">
-                          Limitations
-                        </h4>
-                        <p className="min-w-0 text-xs leading-relaxed [overflow-wrap:anywhere] break-words text-zinc-400">
-                          {message.report.limitations}
-                        </p>
-                      </div>
-                      {message.report.sources.length > 0 && (
-                        <div className="min-w-0 overflow-hidden">
-                          <h4 className="mb-1 text-xs font-semibold text-zinc-500">
-                            Sources · {message.report.sources.length}
-                          </h4>
-                          <ul className="flex min-w-0 flex-col gap-1 overflow-hidden">
-                            {message.report.sources.map((s) => (
-                              <li
-                                key={s.sourceId}
-                                className="min-w-0 overflow-hidden"
-                              >
-                                <a
-                                  href={s.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="block max-w-full truncate text-xs text-zinc-400 underline decoration-zinc-700 underline-offset-2 hover:text-zinc-200"
-                                  title={`${s.title} — ${s.url}`}
-                                >
-                                  {s.title}
-                                </a>
-                                <span
-                                  className="block max-w-full truncate text-[11px] leading-tight [overflow-wrap:anywhere] text-zinc-600"
-                                  title={s.url}
-                                >
-                                  {s.url}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
                   </div>
                 )}
               </>
@@ -304,6 +192,86 @@ export function AssistantMessage({
       {hasContent && !isStreaming && <MessageActions text={text} />}
       {isError && message.error && <MessageActions text={message.error} />}
     </motion.div>
+  )
+}
+
+function SourcesDropdown({
+  sources,
+  conflictingEvidence,
+}: {
+  sources: { sourceId: string; url: string; title: string }[]
+  conflictingEvidence?: string
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const normalizedConflicts = conflictingEvidence?.trim() ?? ''
+  const lower = normalizedConflicts.toLowerCase()
+  const hasConflicts =
+    normalizedConflicts !== '' &&
+    lower !== 'no conflicts' &&
+    lower !== 'no conflicts — all sources agree' &&
+    lower !== 'no conflicts - all sources agree' &&
+    lower !== 'none' &&
+    lower !== 'n/a'
+
+  return (
+    <div className="min-w-0 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setIsOpen((v) => !v)}
+        aria-expanded={isOpen}
+        className="flex w-full items-center gap-1.5 py-1 text-left text-xs font-semibold text-zinc-500 transition-colors hover:text-zinc-300"
+      >
+        <ChevronDown
+          className={`h-3.5 w-3.5 shrink-0 transition-transform duration-300 ${isOpen ? 'rotate-180' : 'rotate-0'}`}
+        />
+        Sources · {sources.length}
+      </button>
+
+      <AnimatePresence initial={false}>
+        {isOpen && (
+          <motion.div
+            key="sources-list"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            className="flex min-w-0 flex-col gap-1 overflow-hidden"
+          >
+            {hasConflicts && (
+              <div className="min-w-0 border-b border-zinc-800/60 pb-2">
+                <span className="text-[11px] font-medium text-zinc-600">
+                  Conflicting evidence
+                </span>
+                <p className="min-w-0 text-[11px] leading-relaxed [overflow-wrap:anywhere] break-words text-zinc-500">
+                  {normalizedConflicts}
+                </p>
+              </div>
+            )}
+            <ul className="flex min-w-0 flex-col gap-1 overflow-hidden">
+              {sources.map((s) => (
+                <li key={s.sourceId} className="min-w-0 overflow-hidden">
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block max-w-full truncate text-xs text-zinc-400 underline decoration-zinc-700 underline-offset-2 hover:text-zinc-200"
+                    title={`${s.title} — ${s.url}`}
+                  >
+                    {s.title}
+                  </a>
+                  <span
+                    className="block max-w-full truncate text-[11px] leading-tight text-zinc-600"
+                    title={s.url}
+                  >
+                    {s.url}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   )
 }
 

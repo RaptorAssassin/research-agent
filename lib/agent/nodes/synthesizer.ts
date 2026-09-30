@@ -7,17 +7,41 @@ export type SynthesizerDeps = {
   llm: LLMProvider
 }
 
+function stripIdentifiers(text: string): string {
+  return text
+    .replace(
+      /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
+      ''
+    )
+    .replace(/\bsrc:\s*\S+/gi, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 const DraftReportSchema = z.object({
-  executiveSummary: z.string().min(1),
-  findings: z.array(z.string()).min(1).max(12),
+  executiveSummary: z
+    .string()
+    .min(1)
+    .describe(
+      'Main answer in GitHub-flavored markdown (bold, lists, blank-line separated paragraphs). No top-level headings.'
+    ),
+  findings: z
+    .array(
+      z.string().min(1).describe('Single finding in GitHub-flavored markdown.')
+    )
+    .min(1)
+    .max(12),
   claims: z.array(
     z.object({
       statement: z.string().min(1),
       confidence: z.number().min(0).max(1),
     })
   ),
-  conflictingEvidence: z.string(),
-  limitations: z.string(),
+  conflictingEvidence: z.string().describe('Plain text, no markdown.'),
+  limitations: z
+    .string()
+    .describe('Plain text or light markdown, no headings.'),
 })
 
 export function createSynthesizerNode(deps: SynthesizerDeps) {
@@ -30,6 +54,9 @@ export function createSynthesizerNode(deps: SynthesizerDeps) {
     const pool = supported.length > 0 ? supported : state.claims
     const evidenceById = new Map(state.evidence.map((e) => [e.evidenceId, e]))
     const sourceById = new Map(state.sources.map((s) => [s.sourceId, s]))
+    const sourceNumber = new Map(
+      state.sources.map((s, i) => [s.sourceId, i + 1])
+    )
     const depth = state.depth ?? 'standard'
     const budget =
       depth === 'brief'
@@ -48,7 +75,8 @@ export function createSynthesizerNode(deps: SynthesizerDeps) {
       .slice(0, budget.evidence)
       .map((e) => {
         const src = sourceById.get(e.sourceId)
-        return `[${e.evidenceId} src:${e.sourceId} ${src?.title ?? ''}]: "${e.text.slice(0, budget.evidenceChars)}"`
+        const n = sourceNumber.get(e.sourceId) ?? 0
+        return `[Source ${n}${src?.title ? ` ${src.title}` : ''}]: "${e.text.slice(0, budget.evidenceChars)}"`
       })
       .join('\n')
 
@@ -56,16 +84,28 @@ export function createSynthesizerNode(deps: SynthesizerDeps) {
       .slice(0, budget.claims)
       .map(
         (c) =>
-          `- ${c.statement} (confidence ${c.confidence}, status ${c.status ?? 'unknown'}, evidence ${c.evidenceIds.join(',')})`
+          `- ${c.statement} (confidence ${c.confidence}, status ${c.status ?? 'unknown'})`
       )
       .join('\n')
 
     let draft: z.infer<typeof DraftReportSchema>
     try {
       draft = await deps.llm.structuredGenerate(
-        `Synthesize report for query "${state.query}". Use ONLY provided claims/evidence, do not invent. Plan: ${state.plan?.objective ?? ''}\n\nClaims:\n${claimsContext}\n\nEvidence:\n${evidenceContext}\n\nProduce ${shape}, claims copied verbatim from Clzaims with confidence, conflictingEvidence explicit (or "No conflicts"), limitations (sources freshness/quality gaps). Respond ONLY JSON.`,
+        `Synthesize report for query "${state.query}". Use ONLY provided claims/evidence, do not invent. Plan: ${state.plan?.objective ?? ''}\n\nClaims:\n${claimsContext}\n\nEvidence:\n${evidenceContext}\n\nProduce ${shape}, claims copied verbatim from claims with confidence, conflictingEvidence explicit (or "No conflicts"), limitations (sources freshness/quality gaps). Refer to sources only in general terms such as "sources report" or "according to the sources". Never print ids, hex strings, uuids, or bracket codes in any text field.\n\nFormatting: executiveSummary, each findings item, and limitations must use GitHub-flavored markdown (bold with **text**, bullet lists with "- ", blank line between paragraphs). Do NOT add "#", "## Key findings", or "## Limitations" headings — the app adds section headings. Respond ONLY JSON.`,
         DraftReportSchema
       )
+      draft = {
+        ...draft,
+        executiveSummary: stripIdentifiers(draft.executiveSummary),
+        findings: draft.findings
+          .map(stripIdentifiers)
+          .filter((f) => f.length > 0),
+        conflictingEvidence: stripIdentifiers(draft.conflictingEvidence),
+        limitations: stripIdentifiers(draft.limitations),
+      }
+      if (draft.findings.length === 0 && pool.length > 0) {
+        draft.findings = [pool[0].statement]
+      }
     } catch (err) {
       console.warn(
         `[synthesizer] LLM failed: ${err instanceof Error ? err.message : String(err)} — fallback`

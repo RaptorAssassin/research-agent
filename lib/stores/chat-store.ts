@@ -4,6 +4,7 @@ import {
 } from '../agent/schemas/message'
 import type { AgentEvent } from '../agent/events'
 import type { Report } from '../agent/schemas/report'
+import { buildReportMarkdown } from '../agent/report-markdown'
 import { create } from 'zustand'
 
 type ChatStore = {
@@ -73,7 +74,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             const data = event.data as { report?: Report }
             if (data?.report) {
               updates.report = data.report
-              updates.content = data.report.executiveSummary
+              updates.content = buildReportMarkdown(data.report)
             }
           }
 

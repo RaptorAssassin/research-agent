@@ -79,7 +79,7 @@ View the app at [http://localhost:3000](http://localhost:3000/)
 
 ## Frontend contract
 
-When building `/research` views, render `executiveSummary` and `findings` expanded, and collapse the evidence-backed `claims` list, `sources` bibliography, and `limitations` into dropdown (`<details>`/accordion) sections so long reports stay scannable.
+Chat answers render the main response (`executiveSummary`) expanded, with `sources` inside a collapsed Sources dropdown. `findings`, evidence-backed `claims`, and `limitations` are produced by the backend but not rendered in the chat UI for now.
 
 ## Future
 

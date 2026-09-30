@@ -5,10 +5,10 @@ export const ReportSchema = z.object({
     .string()
     .min(1)
     .describe(
-      'Main answer. Model decides length: 1 short paragraph for trivial facts, multiple structured paragraphs (with blank-line separation) for complex explanations. Use as many paragraphs as needed; may be very long. Must be evidence-backed.'
+      'Main answer in GitHub-flavored markdown. Model decides length: 1 short paragraph for trivial facts, multiple structured paragraphs (with blank-line separation) for complex explanations. Use as many paragraphs as needed; may be very long. Must be evidence-backed. No top-level headings.'
     ),
   findings: z
-    .array(z.string().min(1))
+    .array(z.string().min(1).describe('Single finding in GitHub-flavored markdown.'))
     .min(1)
     .describe(
       'Key findings: model decides count and length. 2-4 concise bullets for simple queries, many detailed bullets or short paragraphs for complex topics. Each item can be multi-sentence.'
