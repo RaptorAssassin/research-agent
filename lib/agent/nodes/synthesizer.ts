@@ -14,8 +14,11 @@ function stripIdentifiers(text: string): string {
       ''
     )
     .replace(/\bsrc:\s*\S+/gi, '')
+    .replace(/\s*\(confidence\s*[\d.]+(?:\s*,\s*status\s*[a-z_]+)?\)/gi, '')
+    .replace(/\s*\(status\s*[a-z_]+\)/gi, '')
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+\n/g, '\n')
     .trim()
 }
 
@@ -28,7 +31,12 @@ const DraftReportSchema = z.object({
     ),
   findings: z
     .array(
-      z.string().min(1).describe('Single finding in GitHub-flavored markdown.')
+      z
+        .string()
+        .min(1)
+        .describe(
+          'Single finding in GitHub-flavored markdown. Never include confidence scores or status labels.'
+        )
     )
     .min(1)
     .max(12),
@@ -41,7 +49,7 @@ const DraftReportSchema = z.object({
   conflictingEvidence: z.string().describe('Plain text, no markdown.'),
   limitations: z
     .string()
-    .describe('Plain text or light markdown, no headings.'),
+    .describe('Exactly one sentence, plain text, no markdown, no headings.'),
 })
 
 export function createSynthesizerNode(deps: SynthesizerDeps) {
@@ -91,7 +99,7 @@ export function createSynthesizerNode(deps: SynthesizerDeps) {
     let draft: z.infer<typeof DraftReportSchema>
     try {
       draft = await deps.llm.structuredGenerate(
-        `Synthesize report for query "${state.query}". Use ONLY provided claims/evidence, do not invent. Plan: ${state.plan?.objective ?? ''}\n\nClaims:\n${claimsContext}\n\nEvidence:\n${evidenceContext}\n\nProduce ${shape}, claims copied verbatim from claims with confidence, conflictingEvidence explicit (or "No conflicts"), limitations (sources freshness/quality gaps). Refer to sources only in general terms such as "sources report" or "according to the sources". Never print ids, hex strings, uuids, or bracket codes in any text field.\n\nFormatting: executiveSummary, each findings item, and limitations must use GitHub-flavored markdown (bold with **text**, bullet lists with "- ", blank line between paragraphs). Do NOT add "#", "## Key findings", or "## Limitations" headings — the app adds section headings. Respond ONLY JSON.`,
+        `Synthesize report for query "${state.query}". Use ONLY provided claims/evidence, do not invent. Plan: ${state.plan?.objective ?? ''}\n\nClaims:\n${claimsContext}\n\nEvidence:\n${evidenceContext}\n\nProduce ${shape}, claims copied verbatim from claims with confidence, conflictingEvidence explicit (or "No conflicts"), limitations as exactly one sentence on sources freshness/quality gaps. Refer to sources only in general terms such as "sources report" or "according to the sources". Never print ids, hex strings, uuids, bracket codes, confidence scores, or status labels (e.g. "(confidence 1, status supported)") in executiveSummary, findings, conflictingEvidence, or limitations — confidence numbers belong ONLY in the JSON claims[].confidence fields. Never paste multiple claims into one findings item; synthesize each finding as a single clear point.\n\nFormatting: executiveSummary and each findings item must use GitHub-flavored markdown (bold with **text**, bullet lists with "- ", blank line between paragraphs). limitations is exactly one plain-text sentence, no markdown. Do NOT add "#", "## Key findings", or "## Limitations" headings — the app adds section headings. Respond ONLY JSON.`,
         DraftReportSchema
       )
       draft = {

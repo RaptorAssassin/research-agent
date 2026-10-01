@@ -35,19 +35,23 @@ export function Markdown({ text }: { text: string }) {
           </h4>
         ),
         ul: ({ children }) => (
-          <ul className="list-inside list-disc pl-5 text-sm text-zinc-200 not-last:mb-2">
+          <ul className="list-outside list-disc pl-5 text-sm text-zinc-200 not-last:mb-2">
             {children}
           </ul>
         ),
         ol: ({ children, start }) => (
           <ol
-            className="list-inside list-decimal pl-5 text-sm text-zinc-200 not-last:mb-2"
+            className="list-outside list-decimal pl-5 text-sm text-zinc-200 not-last:mb-2"
             start={start}
           >
             {children}
           </ol>
         ),
-        li: ({ children }) => <li className="mt-1">{children}</li>,
+        li: ({ children }) => (
+          <li className="mt-1 leading-relaxed marker:text-zinc-500 [&>p]:inline">
+            {children}
+          </li>
+        ),
         strong: ({ children }) => (
           <strong className="font-bold">{children}</strong>
         ),

@@ -41,17 +41,6 @@ Copy the `.env.example` file and set an OpenAI-compatible endpoint
 cp .env.example .env.local
 ```
 
-Example .env.local file:
-
-```sh
-OPENAI_COMPATIBLE_API_URL=https://openrouter.ai/api/v1
-OPENAI_COMPATIBLE_API_KEY=sk-...
-OPENAI_COMPATIBLE_CHEAP_MODEL=openai/gpt-4o-mini
-OPENAI_COMPATIBLE_STRONG_MODEL=openai/gpt-4o
-```
-
-
-
 Install dependencies:
 
 ```bash

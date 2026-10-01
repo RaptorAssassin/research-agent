@@ -46,7 +46,9 @@ export const ReportSchema = z.object({
     ),
   limitations: z
     .string()
-    .describe('Limitations of sources / what is still unknown'),
+    .describe(
+      'Exactly one sentence on limitations of sources / what is still unknown, plain text.'
+    ),
   sources: z
     .array(
       z.object({
