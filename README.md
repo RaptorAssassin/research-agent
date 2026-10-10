@@ -5,7 +5,24 @@ An AI researching agent built with *LangChain.js* that researches the web and an
 
 ## How it Works
 
-1. Enter a query: Search for anything you would like to know, for example *""*
+```mermaid
+graph TD
+    searchQuery[Search Query] --> apiCall["<code>POST /api/research</code><br><code>{query, stream: true, mode: 'sse'}</code>"]
+    apiCall --> langgraph[LangGraph ]
+    langgraph --> planning[Planning]
+    planning --> research[Research]
+    research --> webSearch[Web Search via Tavily]
+    research --> webScrape[Page Scraping]
+    webSearch --> sourceEvaluation[Source Evaluation]
+    webScrape --> sourceEvaluation
+    sourceEvaluation --> claimExtraction[Claim & Evidence Extraction]
+    claimExtraction --> factCheck[Fact Check]
+    factCheck --> synthesis[Synthesis]
+    synthesis --> reportEvaluation[Report Evaluation]
+    reportEvaluation --> followUp{Follow-Up Questions?}
+    followUp -- Yes --> research
+    followUp -- No --> render[Frontend Renders Markdown From Synthesis]
+```
 
 ## Tech Stack
 
