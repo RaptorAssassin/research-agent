@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Research Agent',
   description: 'Research Agent',
+  icons: { icon: '/icon.svg' },
 }
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
@@ -30,7 +31,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
           target="_blank"
           rel="noreferrer"
           aria-label="View source on GitHub"
-          className="pointer-events-auto fixed left-1/2 top-3 z-50 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/85 px-3 py-1.5 text-xs font-medium text-zinc-400 shadow-lg shadow-black/20 backdrop-blur transition hover:bg-zinc-800 hover:text-zinc-100 sm:left-auto sm:right-4 sm:translate-x-0 sm:px-3.5 sm:py-2"
+          className="pointer-events-auto fixed top-3 left-1/2 z-50 inline-flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900/85 px-3 py-1.5 text-xs font-medium text-zinc-400 shadow-lg shadow-black/20 backdrop-blur transition hover:bg-zinc-800 hover:text-zinc-100 sm:right-4 sm:left-auto sm:translate-x-0 sm:px-3.5 sm:py-2"
         >
           <svg
             viewBox="0 0 16 16"
