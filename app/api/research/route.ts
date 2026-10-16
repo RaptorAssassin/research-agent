@@ -108,9 +108,9 @@ async function handleResearch(req: ResearchRequest, originalReq: Request) {
       }
       const keepAlive = setInterval(() => {
         try {
-          enqueue(': ping\n\n')
+          enqueue(`: ping ${" ".repeat(2048)}\n\n`)
         } catch {}
-      }, 10000)
+      }, 5000)
 
       enqueue(sseEncode(createEvent("research_loop", { status: "started", query }, 0)))
 

@@ -41,53 +41,74 @@ export function createExtractorNode(deps: ExtractorDeps) {
       .sort((a, b) => (b.relevance ?? 0) - (a.relevance ?? 0))
       .slice(0, 6)
 
-    for (const source of topSources) {
-      const content = (source.content ?? source.snippet ?? "").slice(0, 6000)
-      if (content.trim().length < 40) continue
-
-      try {
-        const out = await deps.llm.structuredGenerate(
-          `You extract Evidence and Claims from a source for query "${state.query}".\nSource title: "${source.title}"\nSource URL: ${source.url}\nContent:\n"""${content}"""\n\nRules: Evidence.text must be VERBATIM substring of Content (copy exactly, 20-300 chars). location ~ chars. Claims must be atomic facts directly supported by the evidence from THIS source. confidence 0-1. Respond ONLY JSON matching schema.`,
-          ExtractionSchema,
-        )
-
-        const sourceEvidenceIds: string[] = []
-        for (const ev of out.evidence) {
-          const eid = crypto.randomUUID()
-          evidence.push({
-            evidenceId: eid,
-            sourceId: source.sourceId,
-            text: ev.text,
-            location: ev.location,
-          })
-          sourceEvidenceIds.push(eid)
+    const concurrency = 3
+    const results = await Promise.all(
+      topSources.map(async (source, index) => {
+        // stagger to avoid hammering the LLM provider all at once
+        if (index >= concurrency) {
+          await new Promise((r) => setTimeout(r, (index % concurrency) * 300))
         }
+        const content = (source.content ?? source.snippet ?? "").slice(0, 6000)
+        if (content.trim().length < 40) return null
 
-        if (sourceEvidenceIds.length === 0) continue
+        try {
+          const out = await deps.llm.structuredGenerate(
+            `You extract Evidence and Claims from a source for query "${state.query}".\nSource title: "${source.title}"\nSource URL: ${source.url}\nContent:\n"""${content}"""\n\nRules: Evidence.text must be VERBATIM substring of Content (copy exactly, 20-300 chars). location ~ chars. Claims must be atomic facts directly supported by the evidence from THIS source. confidence 0-1. Respond ONLY JSON matching schema.`,
+            ExtractionSchema,
+          )
 
-        for (const cl of out.claims) {
-          const eids = sourceEvidenceIds.slice(0, 2)
-          claims.push({
-            claimId: crypto.randomUUID(),
-            statement: cl.statement,
-            confidence: cl.confidence,
-            evidenceIds: eids,
-          })
+          const sourceEvidence: Evidence[] = []
+          const sourceClaims: Claim[] = []
+          const sourceEvidenceIds: string[] = []
+          for (const ev of out.evidence) {
+            const eid = crypto.randomUUID()
+            sourceEvidence.push({
+              evidenceId: eid,
+              sourceId: source.sourceId,
+              text: ev.text,
+              location: ev.location,
+            })
+            sourceEvidenceIds.push(eid)
+          }
+
+          if (sourceEvidenceIds.length === 0) return null
+
+          for (const cl of out.claims) {
+            const eids = sourceEvidenceIds.slice(0, 2)
+            sourceClaims.push({
+              claimId: crypto.randomUUID(),
+              statement: cl.statement,
+              confidence: cl.confidence,
+              evidenceIds: eids,
+            })
+          }
+          return { sourceEvidence, sourceClaims }
+        } catch (err) {
+          console.warn(`[extractor] failed for ${source.url}: ${err instanceof Error ? err.message : String(err)}`)
+          const snippet = (source.snippet ?? source.content ?? "").slice(0, 240)
+          if (snippet.length >= 20) {
+            const eid = crypto.randomUUID()
+            return {
+              sourceEvidence: [{ evidenceId: eid, sourceId: source.sourceId, text: snippet, location: "snippet" }],
+              sourceClaims: [
+                {
+                  claimId: crypto.randomUUID(),
+                  statement: `${source.title}: ${snippet.slice(0, 120)}`,
+                  confidence: 0.55,
+                  evidenceIds: [eid],
+                },
+              ],
+            }
+          }
+          return null
         }
-      } catch (err) {
-        console.warn(`[extractor] failed for ${source.url}: ${err instanceof Error ? err.message : String(err)}`)
-        const snippet = (source.snippet ?? source.content ?? "").slice(0, 240)
-        if (snippet.length >= 20) {
-          const eid = crypto.randomUUID()
-          evidence.push({ evidenceId: eid, sourceId: source.sourceId, text: snippet, location: "snippet" })
-          claims.push({
-            claimId: crypto.randomUUID(),
-            statement: `${source.title}: ${snippet.slice(0, 120)}`,
-            confidence: 0.55,
-            evidenceIds: [eid],
-          })
-        }
-      }
+      }),
+    )
+
+    for (const r of results) {
+      if (!r) continue
+      evidence.push(...r.sourceEvidence)
+      claims.push(...r.sourceClaims)
     }
 
     if (evidence.length === 0 && state.sources.length > 0) {
