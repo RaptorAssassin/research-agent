@@ -50,11 +50,21 @@ function stripFences(raw: string): string {
   return (fenced?.[1] ?? trimmed).trim()
 }
 
+function resolveTimeoutMs(explicit?: number): number {
+  if (explicit !== undefined && Number.isFinite(explicit)) {
+    return Math.max(5000, Math.min(300000, Math.round(explicit)))
+  }
+  const raw = process.env.LLM_TIMEOUT_MS ? Number(process.env.LLM_TIMEOUT_MS) : NaN
+  if (!Number.isFinite(raw)) return 90000
+  return Math.max(5000, Math.min(300000, Math.round(raw)))
+}
+
 export class OpenAICompatibleProvider implements LLMProvider {
   private readonly model: string
   private readonly baseUrl: string
   private readonly apiKey: string
   private readonly temperature?: number
+  private readonly timeoutMs: number
 
   constructor(opts: LLMOptions = {}) {
     const baseUrl = resolveBaseUrl(opts.baseUrl)
@@ -72,6 +82,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
     this.baseUrl = baseUrl
     this.apiKey = resolveApiKey(opts.apiKey)
     this.temperature = opts.temperature
+    this.timeoutMs = resolveTimeoutMs((opts as { timeoutMs?: number }).timeoutMs)
   }
 
   private headers(): Record<string, string> {
@@ -92,6 +103,7 @@ export class OpenAICompatibleProvider implements LLMProvider {
         method: 'POST',
         headers: this.headers(),
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(this.timeoutMs),
       })
     } catch (cause) {
       throw new Error(

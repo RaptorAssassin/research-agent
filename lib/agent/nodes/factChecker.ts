@@ -21,31 +21,38 @@ export function createFactCheckerNode(deps: FactCheckerDeps) {
 
     const updated: Claim[] = []
 
-    for (const claim of state.claims) {
-      const evTexts = claim.evidenceIds
-        .map((id) => evidenceById.get(id))
-        .filter(Boolean)
-        .map((e) => `Evidence (${e!.sourceId} ${sourceById.get(e!.sourceId)?.title ?? ""}): "${e!.text}"`)
-        .join("\n")
+    const concurrency = 4
+    for (let i = 0; i < state.claims.length; i += concurrency) {
+      const batch = state.claims.slice(i, i + concurrency)
+      const results = await Promise.all(
+        batch.map(async (claim) => {
+          const evTexts = claim.evidenceIds
+            .map((id) => evidenceById.get(id))
+            .filter(Boolean)
+            .map((e) => `Evidence (${e!.sourceId} ${sourceById.get(e!.sourceId)?.title ?? ""}): "${e!.text}"`)
+            .join("\n")
 
-      if (!evTexts) {
-        updated.push({ ...claim, status: "unresolved" })
-        continue
-      }
+          if (!evTexts) {
+            return { ...claim, status: "unresolved" as const }
+          }
 
-      try {
-        const out = await deps.llm.structuredGenerate(
-          `Fact-check ONE claim against its evidence. Claim: "${claim.statement}"\nEvidence:\n${evTexts}\n\nStatuses: supported=fully backed by verbatim evidence, weakly_supported=partial/indirect, unsupported=contradicted or not in evidence, conflicting=evidence contradicts itself, unresolved=insufficient evidence. Respond ONLY JSON {status, reasoning}.`,
-          FactCheckSchema,
-        )
-        updated.push({ ...claim, status: out.status })
-      } catch {
-        const hasText = claim.evidenceIds.some((id) => {
-          const t = evidenceById.get(id)?.text.toLowerCase() ?? ""
-          return claim.statement.toLowerCase().split(/\s+/).some((tok) => tok.length > 4 && t.includes(tok))
-        })
-        updated.push({ ...claim, status: hasText ? "weakly_supported" : "unresolved" })
-      }
+          try {
+            const out = await deps.llm.structuredGenerate(
+              `Fact-check ONE claim against its evidence. Claim: "${claim.statement}"\nEvidence:\n${evTexts}\n\nStatuses: supported=fully backed by verbatim evidence, weakly_supported=partial/indirect, unsupported=contradicted or not in evidence, conflicting=evidence contradicts itself, unresolved=insufficient evidence. Respond ONLY JSON {status, reasoning}.`,
+              FactCheckSchema,
+            )
+            return { ...claim, status: out.status }
+          } catch (err) {
+            console.warn(`[factChecker] failed for "${claim.statement.slice(0, 80)}": ${err instanceof Error ? err.message : String(err)} — fallback`)
+            const hasText = claim.evidenceIds.some((id) => {
+              const t = evidenceById.get(id)?.text.toLowerCase() ?? ""
+              return claim.statement.toLowerCase().split(/\s+/).some((tok) => tok.length > 4 && t.includes(tok))
+            })
+            return { ...claim, status: hasText ? ("weakly_supported" as const) : ("unresolved" as const) }
+          }
+        }),
+      )
+      updated.push(...results)
     }
 
     return { claims: updated }
