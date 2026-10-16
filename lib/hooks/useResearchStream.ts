@@ -10,10 +10,11 @@ export function useResearchStream() {
   }
 
   async function run(query: string, maxIterations?: number) {
-    const res = fetch('/api/research', {
+    const response = await fetch('/api/research', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
       },
       body: JSON.stringify({
         query,
@@ -23,11 +24,12 @@ export function useResearchStream() {
       }),
     })
 
-    if (!(await res).ok) {
-      throw new Error(`Request failed with status ${(await res).text()}`)
+    if (!response.ok) {
+      const text = await response.text().catch(() => response.statusText)
+      throw new Error(`Request failed with status ${response.status}: ${text}`)
     }
 
-    const reader = (await res).body?.getReader()
+    const reader = response.body?.getReader()
     if (!reader) {
       throw new Error('Failed to get reader from response body')
     }

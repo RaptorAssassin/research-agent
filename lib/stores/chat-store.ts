@@ -129,11 +129,28 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   runQuery: async (query, maxIterations) => {
     const trimmed = query.trim()
     if (!trimmed) return
+    if (get().streamingMessageId) return
 
     const { addUserMessage, startAssistantMessage, appendEvent, setAssistantStatus } = get()
 
     addUserMessage(trimmed)
     const assistantId = startAssistantMessage(trimmed)
+
+    const handleEventBlock = (block: string): boolean => {
+      const parsed = parseSseBlock(block)
+      if (!parsed) return false
+      if (parsed.type === 'error') {
+        const data = JSON.parse(parsed.payload) as { error: string }
+        throw new Error(data.error)
+      }
+      if (parsed.type === 'done') {
+        setAssistantStatus(assistantId, 'complete')
+        set({ streamingMessageId: null })
+        return true
+      }
+      appendEvent(assistantId, JSON.parse(parsed.payload) as AgentEvent)
+      return false
+    }
 
     try {
       const res = await fetch('/api/research', {
@@ -162,37 +179,58 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       let buf = ''
       const decoder = new TextDecoder()
 
+      const drain = () => {
+        const parts = buf.split(/\r?\n\r?\n/)
+        buf = parts.pop() ?? ''
+        for (const part of parts) {
+          if (handleEventBlock(part)) return true
+        }
+        return false
+      }
+
       while (true) {
         const { value, done } = await reader.read()
         if (done) break
         buf += decoder.decode(value, { stream: true })
-        const parts = buf.split('\n\n')
-        buf = parts.pop() ?? ''
-
-        for (const part of parts) {
-          const m = part.match(/^event: ([^\n]+)\ndata: ([\s\S]+)$/)
-          if (!m) continue
-          if (m[1] === 'error') {
-            const parsed = JSON.parse(m[2]) as { error: string }
-            throw new Error(parsed.error)
-          }
-          if (m[1] === 'done') {
-            setAssistantStatus(assistantId, 'complete')
-            set({ streamingMessageId: null })
-            return
-          }
-
-          const ev = JSON.parse(m[2]) as AgentEvent
-          appendEvent(assistantId, ev)
-        }
+        if (drain()) return
       }
+      buf += decoder.decode()
+      if (buf.trim() && handleEventBlock(buf)) return
 
       setAssistantStatus(assistantId, 'complete')
       set({ streamingMessageId: null })
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = describeStreamError(err)
       get().setAssistantStatus(assistantId, 'error', msg)
       set({ streamingMessageId: null })
     }
   },
 }))
+
+function parseSseBlock(block: string): { type: string; payload: string } | null {
+  let type = ''
+  const dataLines: string[] = []
+  for (const rawLine of block.split('\n')) {
+    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
+    if (!line || line.startsWith(':')) continue
+    if (line.startsWith('event:')) {
+      type = line.slice('event:'.length).trim()
+    } else if (line.startsWith('data:')) {
+      const rest = line.slice('data:'.length)
+      dataLines.push(rest.startsWith(' ') ? rest.slice(1) : rest)
+    }
+  }
+  if (dataLines.length === 0) return null
+  return { type: type || 'message', payload: dataLines.join('\n') }
+}
+
+function describeStreamError(err: unknown): string {
+  if (err instanceof DOMException && err.name === 'AbortError') {
+    return 'Request was cancelled'
+  }
+  const msg = err instanceof Error ? err.message : String(err)
+  if (err instanceof TypeError) {
+    return `Connection lost while streaming (${msg}) — a proxy or the server may have closed the idle connection; try again`
+  }
+  return msg
+}

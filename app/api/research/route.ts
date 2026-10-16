@@ -93,7 +93,26 @@ async function handleResearch(req: ResearchRequest, originalReq: Request) {
     async start(controller) {
       const encoder = new TextEncoder()
 
-      const enqueue = (str: string) => controller.enqueue(encoder.encode(str))
+      let closed = false
+      const close = () => {
+        if (closed) return
+        closed = true
+        try {
+          controller.close()
+        } catch {}
+      }
+      const enqueue = (str: string) => {
+        if (!closed && !originalReq.signal.aborted) {
+          controller.enqueue(encoder.encode(str))
+        }
+      }
+      const keepAlive = setInterval(() => {
+        try {
+          enqueue(': ping\n\n')
+        } catch {}
+      }, 10000)
+
+      enqueue(sseEncode(createEvent("research_loop", { status: "started", query }, 0)))
 
       try {
         if (mode === "values" || mode === "updates") {
@@ -111,7 +130,7 @@ async function handleResearch(req: ResearchRequest, originalReq: Request) {
             }
           }
           enqueue(sseEncodeDone())
-          controller.close()
+          close()
           return
         }
 
@@ -120,7 +139,7 @@ async function handleResearch(req: ResearchRequest, originalReq: Request) {
             if (originalReq.signal.aborted) break
             enqueue(`${JSON.stringify(chunk)}\n`)
           }
-          controller.close()
+          close()
           return
         }
 
@@ -129,13 +148,16 @@ async function handleResearch(req: ResearchRequest, originalReq: Request) {
           enqueue(sseEncode(ev))
         }
         enqueue(sseEncodeDone())
-        controller.close()
+        close()
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         try {
           enqueue(`event: error\ndata: ${JSON.stringify({ error: msg })}\n\n`)
         } catch {}
-        controller.close()
+        close()
+      } finally {
+        clearInterval(keepAlive)
+        close()
       }
     },
     cancel() {
@@ -145,7 +167,7 @@ async function handleResearch(req: ResearchRequest, originalReq: Request) {
 
   const headers: Record<string, string> = {
     "Cache-Control": "no-cache, no-transform",
-    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
   }
 
   if (mode === "events") {

@@ -2,6 +2,7 @@
 
 An AI researching agent built with *LangChain.js* that researches the web and answers with sources.
 
+[**Live Demo**]()
 
 ## How it Works
 
@@ -21,7 +22,7 @@ graph TD
     synthesis --> reportEvaluation[Report Evaluation]
     reportEvaluation --> followUp{Follow-Up Questions?}
     followUp -- Yes --> research
-    followUp -- No --> render[Frontend Renders Markdown From Synthesis]
+    followUp -- No --> render[Frontend Renders Response Markdown From Synthesis]
 ```
 
 ## Tech Stack
@@ -35,6 +36,7 @@ graph TD
 
 - **TypeScript**
 - **LangChain.js & LangGraph**: A framework for building AI agents using nodes that fulfill different purposes like searching the web or fact-checking.
+- **OpenAI-compatible API**: For LLM tasks, a OpenAI-compatible API endpoint specified in the .env file gets called. For this demo, Hackclub AI was used.
 
 ## Getting Started
 
@@ -52,7 +54,7 @@ node -v #v24.0.0 or higher
 pnpm -v #v11.25.0 or higher
 ```
 
-Copy the `.env.example` file and set an OpenAI-compatible endpoint
+Copy the `.env.example` file and set an OpenAI-compatible API endpoint (base URL + API key) and the models you want to use. For the exact details, refer to the docs of the API you're using.
 
 ```bash
 cp .env.example .env.local
@@ -70,9 +72,9 @@ Run the development server:
 pnpm dev
 ```
 
-View the app at [http://localhost:3000](http://localhost:3000/)
+View the app at [http://localhost:3000](http://localhost:3000/).
 
-## API
+<!-- ## API
 
 `POST /api/research` (or `GET /api/research?query=...`) accepts:
 
@@ -81,12 +83,12 @@ View the app at [http://localhost:3000](http://localhost:3000/)
 ```
 
 - `depth` (default `standard`) controls answer length: `brief` gives a 2-3 sentence summary with 2-4 bullets and fewer searches; `deep` gives multi-paragraph explanations with up to 12 findings and more evidence per claim.
-- Source scoring is deterministic (no LLM calls); the strong model is reserved for fact-checking, synthesis, and evaluation.
+- Source scoring is deterministic (no LLM calls); the strong model is reserved for fact-checking, synthesis, and evaluation. -->
 
-## Frontend contract
+<!-- ## Frontend contract
 
-Chat answers render the main response (`executiveSummary`) expanded, with `sources` inside a collapsed Sources dropdown. `findings`, evidence-backed `claims`, and `limitations` are produced by the backend but not rendered in the chat UI for now.
+Chat answers render the main response (`executiveSummary`) expanded, with `sources` inside a collapsed Sources dropdown. `findings`, evidence-backed `claims`, and `limitations` are produced by the backend but not rendered in the chat UI for now. -->
 
-## Future
+## Future Updates
 
-Local Ollama support (`lib/llm/ollama.ts`) is kept in the repo but currently unwired — the app only uses the OpenAI-compatible API for now.
+Ollama support is in the works.

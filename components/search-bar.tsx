@@ -1,32 +1,39 @@
 'use client'
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from 'react'
+import { useChatStore } from '@/lib/stores/chat-store'
 
 export function SearchBar({ run }: { run: (query: string) => void }) {
-    const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [value, setValue] = useState('')
+  const isStreaming = useChatStore((s) => s.streamingMessageId !== null)
 
-    useEffect(() => {
+  useEffect(() => {
     inputRef.current?.focus()
   }, [])
 
-  const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
-    e.preventDefault()
-
-    const formData = new FormData(e.currentTarget)
-    const raw = formData.get("query") as string
+  const submitQuery = (raw: string) => {
     const query = raw.trim()
-
-    if (!query) return
-
+    if (!query || isStreaming) return
     run(query)
-    e.currentTarget.reset()
+    setValue('')
     inputRef.current?.focus()
+  }
+
+  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    submitQuery(value)
+  }
+
+  const handleButtonClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault()
+    submitQuery(value)
   }
 
   return (
     <div className="w-full rounded-2xl border border-zinc-800 bg-zinc-900 p-2 shadow-xl shadow-black/30 sm:p-3">
       <form
         className="flex w-full items-center gap-2 sm:gap-3"
-        onSubmit={handleSubmit}
+        onSubmit={handleFormSubmit}
       >
         <input
           type="text"
@@ -34,12 +41,19 @@ export function SearchBar({ run }: { run: (query: string) => void }) {
           name="query"
           placeholder="Research Task"
           autoComplete="off"
-          className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none sm:px-4 sm:text-[15px]"
+          aria-label="Research task"
+          disabled={isStreaming}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none disabled:opacity-50 sm:px-4 sm:text-[15px]"
           ref={inputRef}
         />
         <button
-          type="submit"
-          className="shrink-0 rounded-full bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition hover:bg-white active:scale-[0.97] sm:px-5"
+          type="button"
+          onClick={handleButtonClick}
+          disabled={isStreaming || !value.trim()}
+          aria-label="Start research"
+          className="shrink-0 rounded-full bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 transition hover:bg-white active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-zinc-100 sm:px-5"
         >
           Search
         </button>
