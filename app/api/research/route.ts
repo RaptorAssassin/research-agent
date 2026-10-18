@@ -1,7 +1,7 @@
 import { graph, buildGraph, MAX_ITERATIONS } from "@/lib/agent/graph"
 import { createEvent, isStreamMode, type StreamMode } from "@/lib/agent/events"
 import { parseDepth, type Depth } from "@/lib/agent/state"
-import { sseEncode, sseEncodeDone } from "@/lib/agent/runner"
+import { eventsFromGraph, mapNodeToEventType, sseEncode, sseEncodeDone, type StreamableGraph } from "@/lib/agent/runner"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -135,7 +135,7 @@ async function handleResearch(req: ResearchRequest, originalReq: Request) {
         }
 
         if (mode === "events") {
-          for await (const chunk of eventsFromGraph(activeGraph, query, depth)) {
+          for await (const chunk of eventsFromGraph(activeGraph as unknown as StreamableGraph, query, depth)) {
             if (originalReq.signal.aborted) break
             enqueue(`${JSON.stringify(chunk)}\n`)
           }
@@ -143,7 +143,7 @@ async function handleResearch(req: ResearchRequest, originalReq: Request) {
           return
         }
 
-        for await (const ev of eventsFromGraph(activeGraph, query, depth)) {
+        for await (const ev of eventsFromGraph(activeGraph as unknown as StreamableGraph, query, depth)) {
           if (originalReq.signal.aborted) break
           enqueue(sseEncode(ev))
         }
@@ -179,40 +179,4 @@ async function handleResearch(req: ResearchRequest, originalReq: Request) {
   }
 
   return new Response(stream, { headers })
-}
-
-function mapNodeToEventType(node: string): import("@/lib/agent/events").AgentEventType {
-  const m: Record<string, import("@/lib/agent/events").AgentEventType> = {
-    planner: "planning",
-    researcher: "search",
-    sourceEvaluator: "source_evaluated",
-    extractor: "claim_extracted",
-    factChecker: "fact_check",
-    synthesizer: "synthesis",
-    evaluator: "evaluation",
-  }
-  return m[node] ?? "research_loop"
-}
-
-async function* eventsFromGraph(
-  activeGraph: typeof graph,
-  query: string,
-  depth: Depth,
-): AsyncGenerator<import("@/lib/agent/events").AgentEvent> {
-  const gen = await (activeGraph.stream as unknown as (input: unknown, opts: unknown) => Promise<AsyncIterable<Record<string, unknown>>>)({ query, iteration: 0, depth }, { streamMode: "updates" })
-  for await (const chunk of gen) {
-    const nodeName = Object.keys(chunk)[0]
-    const data = chunk[nodeName] as { iteration?: number } & Record<string, unknown>
-    const iteration = data?.iteration ?? 0
-    yield createEvent(mapNodeToEventType(nodeName), data, iteration)
-    if (nodeName === "evaluator" && (data as { evaluation?: { needsMoreResearch?: boolean } })?.evaluation?.needsMoreResearch) {
-      yield createEvent("research_loop", { next: "researcher", iteration: iteration + 1 }, iteration + 1)
-    }
-    if (nodeName === "researcher" && Array.isArray((data as { sources?: unknown[] })?.sources)) {
-      const sources = (data as { sources: { url: string; title: string; sourceId: string }[] }).sources
-      for (const s of sources.slice(0, 3)) {
-        yield createEvent("source_found", s, iteration)
-      }
-    }
-  }
 }

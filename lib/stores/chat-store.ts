@@ -136,24 +136,8 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     addUserMessage(trimmed)
     const assistantId = startAssistantMessage(trimmed)
 
-    const handleEventBlock = (block: string): boolean => {
-      const parsed = parseSseBlock(block)
-      if (!parsed) return false
-      if (parsed.type === 'error') {
-        const data = JSON.parse(parsed.payload) as { error: string }
-        throw new Error(data.error)
-      }
-      if (parsed.type === 'done') {
-        setAssistantStatus(assistantId, 'complete')
-        set({ streamingMessageId: null })
-        return true
-      }
-      appendEvent(assistantId, JSON.parse(parsed.payload) as AgentEvent)
-      return false
-    }
-
     try {
-      const res = await fetch('/api/research', {
+      const startRes = await fetch('/api/research/job', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -161,44 +145,55 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         body: JSON.stringify({
           query: trimmed,
           maxIterations,
-          stream: true,
-          mode: 'sse',
         }),
       })
 
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(text || `Request failed with status ${res.status}`)
+      if (!startRes.ok) {
+        throw new Error(await readErrorDetail(startRes))
       }
 
-      const reader = res.body?.getReader()
-      if (!reader) {
-        throw new Error('Failed to get reader from response body')
-      }
+      const started = (await startRes.json()) as { jobId: string }
+      const deadline = Date.now() + 10 * 60 * 1000
+      let cursor = 0
 
-      let buf = ''
-      const decoder = new TextDecoder()
-
-      const drain = () => {
-        const parts = buf.split(/\r?\n\r?\n/)
-        buf = parts.pop() ?? ''
-        for (const part of parts) {
-          if (handleEventBlock(part)) return true
+      for (;;) {
+        if (Date.now() > deadline) {
+          throw new Error('Timed out waiting for the research job to finish')
         }
-        return false
-      }
 
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        buf += decoder.decode(value, { stream: true })
-        if (drain()) return
-      }
-      buf += decoder.decode()
-      if (buf.trim() && handleEventBlock(buf)) return
+        const pollRes = await fetch(
+          `/api/research/job?jobId=${encodeURIComponent(started.jobId)}&cursor=${cursor}`,
+          { cache: 'no-store' }
+        )
 
-      setAssistantStatus(assistantId, 'complete')
-      set({ streamingMessageId: null })
+        if (!pollRes.ok) {
+          throw new Error(await readErrorDetail(pollRes))
+        }
+
+        const data = (await pollRes.json()) as {
+          status: 'running' | 'done' | 'error'
+          error?: string
+          cursor: number
+          events: AgentEvent[]
+        }
+
+        cursor = data.cursor
+        for (const event of data.events) {
+          appendEvent(assistantId, event)
+        }
+
+        if (data.status === 'error') {
+          throw new Error(data.error ?? 'Research job failed')
+        }
+
+        if (data.status === 'done') {
+          setAssistantStatus(assistantId, 'complete')
+          set({ streamingMessageId: null })
+          return
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 700))
+      }
     } catch (err) {
       const msg = describeStreamError(err)
       get().setAssistantStatus(assistantId, 'error', msg)
@@ -207,21 +202,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   },
 }))
 
-function parseSseBlock(block: string): { type: string; payload: string } | null {
-  let type = ''
-  const dataLines: string[] = []
-  for (const rawLine of block.split('\n')) {
-    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
-    if (!line || line.startsWith(':')) continue
-    if (line.startsWith('event:')) {
-      type = line.slice('event:'.length).trim()
-    } else if (line.startsWith('data:')) {
-      const rest = line.slice('data:'.length)
-      dataLines.push(rest.startsWith(' ') ? rest.slice(1) : rest)
-    }
-  }
-  if (dataLines.length === 0) return null
-  return { type: type || 'message', payload: dataLines.join('\n') }
+async function readErrorDetail(res: Response): Promise<string> {
+  const data = (await res.json().catch(() => null)) as { error?: string } | null
+  return data?.error ?? `Request failed with status ${res.status}`
 }
 
 function describeStreamError(err: unknown): string {
@@ -230,7 +213,7 @@ function describeStreamError(err: unknown): string {
   }
   const msg = err instanceof Error ? err.message : String(err)
   if (err instanceof TypeError) {
-    return `Connection lost while streaming (${msg}) — a proxy or the server may have closed the idle connection; try again`
+    return `Connection lost while contacting the server (${msg}) — check your network and try again`
   }
   return msg
 }
