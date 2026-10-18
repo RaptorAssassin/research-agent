@@ -4,6 +4,8 @@ An AI researching agent built with *LangChain.js* that researches the web and an
 
 [**Live Demo**](https://karl.hackclub.app/)
 
+<img width="1291" height="927" alt="image" src="https://github.com/user-attachments/assets/9a5e5149-8451-41d7-9d70-0b0b8d22c158" />
+
 ## How it Works
 
 ```mermaid
