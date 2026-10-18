@@ -2,7 +2,7 @@
 
 An AI researching agent built with *LangChain.js* that researches the web and answers with sources.
 
-[**Live Demo**]()
+[**Live Demo**](https://karl.hackclub.app/)
 
 ## How it Works
 
@@ -73,21 +73,6 @@ pnpm dev
 ```
 
 View the app at [http://localhost:3000](http://localhost:3000/).
-
-<!-- ## API
-
-`POST /api/research` (or `GET /api/research?query=...`) accepts:
-
-```json
-{ "query": "string", "depth": "brief|standard|deep", "maxIterations": 2 }
-```
-
-- `depth` (default `standard`) controls answer length: `brief` gives a 2-3 sentence summary with 2-4 bullets and fewer searches; `deep` gives multi-paragraph explanations with up to 12 findings and more evidence per claim.
-- Source scoring is deterministic (no LLM calls); the strong model is reserved for fact-checking, synthesis, and evaluation. -->
-
-<!-- ## Frontend contract
-
-Chat answers render the main response (`executiveSummary`) expanded, with `sources` inside a collapsed Sources dropdown. `findings`, evidence-backed `claims`, and `limitations` are produced by the backend but not rendered in the chat UI for now. -->
 
 ## Future Updates
 
